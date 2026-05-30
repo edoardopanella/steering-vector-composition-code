@@ -5,8 +5,8 @@ steered completions - (behavior_pair, setting, prompt, completion) - but no judg
 scores; only the empty human-rating columns (rating_b1, rating_b2, notes).
 
 This script scores every completion with the SAME logprob 0-100 judge used by the
-composition pipeline (src/composition/joint_judge.py and composition_scoring_v3):
-each completion is judged against
+composition pipeline (scripts/compositions/composition_scoring.py): each
+completion is judged against
   * behavior 1 of its pair          -> score_b1
   * behavior 2 of its pair          -> score_b2
   * Anthropic-style coherence       -> coherence
@@ -16,7 +16,7 @@ src.extraction.generation._judge_all.
 The behaviors here are personas (apathetic / evil / humorous) which are NOT in
 src.scoring.BEHAVIOR_PROMPTS, so the per-trait eval prompts are read from the
 per-pair artifacts in data/composition_eval/{a}__{b}.json (trait_a/eval_prompt_a,
-trait_b/eval_prompt_b) - the exact prompts composition_scoring_v3 judges with.
+trait_b/eval_prompt_b) - the exact prompts composition_scoring.py judges with.
 
 This script is intentionally torch-free: it is a judge-only step that runs off-GPU,
 so it does NOT import src.extraction.generation (which drags in torch +

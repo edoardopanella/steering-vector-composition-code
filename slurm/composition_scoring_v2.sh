@@ -37,18 +37,19 @@ set -a; source .env; set +a
 
 mkdir -p /home/3247897/logs
 
-# Generate stage only on cluster. Judge stage runs on laptop:
-#   COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring_v2
+# normalized_sum scheme (paper Eq 2). Generate stage only on cluster; judge
+# stage runs on laptop with the same COMPOSITION_SCHEME:
+#   COMPOSITION_SCHEME=normalized_sum COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring
+export COMPOSITION_SCHEME=normalized_sum
 export COMPOSITION_MODE=generate
 
-echo "Starting Phase 12.5 (composition_scoring_v2: normalize=True, α=4.5, 28 pairs) — $(date)"
+echo "Starting normalized-sum composition scoring (normalize=True, α=4.5, 28 pairs) — $(date)"
 export PYTHONPATH=/home/3247897/steering-vector-composition
-python -u -m scripts.compositions.composition_scoring_v2
-echo "Phase 12.5 generate stage done — $(date)"
+python -u -m scripts.compositions.composition_scoring
+echo "Normalized-sum generate stage done — $(date)"
 echo ""
 echo "Next step (laptop, needs OPENAI_API_KEY):"
 echo "  # 1) Pull new CSVs (use --ignore-existing to protect any local scores):"
-echo "  rsync -av --ignore-existing bocconi-hpc:/home/3247897/steering-vector-composition/results/composition_scoring_l17_v2/ ./results/composition_scoring_l17_v2/"
-echo "  rsync -av --ignore-existing bocconi-hpc:/home/3247897/steering-vector-composition/results/composition_trajectories_l17_v2/ ./results/composition_trajectories_l17_v2/"
+echo "  rsync -av --ignore-existing bocconi-hpc:/home/3247897/steering-vector-composition/results/composition/normalized_sum_a4.5/ ./results/composition/normalized_sum_a4.5/"
 echo "  # 2) Judge + aggregate + τ + summary:"
-echo "  COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring_v2"
+echo "  COMPOSITION_SCHEME=normalized_sum COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring"

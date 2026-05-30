@@ -37,18 +37,19 @@ set -a; source .env; set +a
 
 mkdir -p /home/3247897/logs
 
-# Generate stage only on cluster. Judge stage runs on laptop:
-#   COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring_v3
+# projection_controlled scheme (paper Eq 3). Generate stage only on cluster;
+# judge stage runs on laptop with the same COMPOSITION_SCHEME:
+#   COMPOSITION_SCHEME=projection_controlled COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring
+export COMPOSITION_SCHEME=projection_controlled
 export COMPOSITION_MODE=generate
 
-echo "Starting Phase 15.16 (per_axis) (composition_scoring_v3: normalize=per_axis, α=4.5, 28 pairs) — $(date)"
+echo "Starting projection-controlled composition scoring (normalize=per_axis, α=4.5, 28 pairs) — $(date)"
 export PYTHONPATH=/home/3247897/steering-vector-composition
-python -u -m scripts.compositions.composition_scoring_v3
-echo "Phase 15.16 (per_axis) generate stage done — $(date)"
+python -u -m scripts.compositions.composition_scoring
+echo "Projection-controlled generate stage done — $(date)"
 echo ""
 echo "Next step (laptop, needs OPENAI_API_KEY):"
 echo "  # 1) Pull new CSVs (use --ignore-existing to protect any local scores):"
-echo "  rsync -av --ignore-existing bocconi-hpc:/home/3247897/steering-vector-composition/results/composition_scoring_l17_v3/ ./results/composition_scoring_l17_v3/"
-echo "  rsync -av --ignore-existing bocconi-hpc:/home/3247897/steering-vector-composition/results/composition_trajectories_l17_v3/ ./results/composition_trajectories_l17_v3/"
+echo "  rsync -av --ignore-existing bocconi-hpc:/home/3247897/steering-vector-composition/results/composition/projection_controlled_a4.5/ ./results/composition/projection_controlled_a4.5/"
 echo "  # 2) Judge + aggregate + τ + summary:"
-echo "  COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring_v3"
+echo "  COMPOSITION_SCHEME=projection_controlled COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring"

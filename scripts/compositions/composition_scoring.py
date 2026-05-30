@@ -1,9 +1,14 @@
 """
 LLM judge for evaluating composition of steering vectors.
 
-Unnormalized-sum composition mode (normalize=False): joint injection at L=17 on
-UNIT-NORMALISED vectors:
-    h += α * (v_a_unit + v_b_unit)   at block HOOK_LAYER_IDX, positions="response"
+Joint injection at L=17 on UNIT-NORMALISED vectors, at block HOOK_LAYER_IDX,
+positions="response". The composition scheme is selected via the
+COMPOSITION_SCHEME env var (default: unnormalized_sum); each scheme writes to a
+disjoint output tree under results/composition/ so all three coexist:
+
+    unnormalized_sum       δ = α·(v̂_a + v̂_b)                  (Appendix F baseline)
+    normalized_sum         δ = α·(v̂_a + v̂_b)/‖v̂_a + v̂_b‖      (paper Eq 2, α=4.5)
+    projection_controlled  δ = (α/(1+cos))·(v̂_a + v̂_b)         (paper Eq 3, α=4.5)
 
 For each unordered pair over the validated traits:
     1. Load composition eval JSON (data/composition_eval/{a}__{b}.json):
@@ -13,15 +18,16 @@ For each unordered pair over the validated traits:
        Composition score = mean(trait_a, trait_b).
     4. Save per-pair CSVs (baseline + steered) + aggregate JSON. Idempotent.
 
-Run:
+Run (set COMPOSITION_SCHEME to pick the scheme; same env var for the off-cluster
+judge/aggregate helpers, which import the resolved paths from this module):
     # All stages in one process (needs GPU + internet):
-    python -m scripts.compositions.composition_scoring
+    COMPOSITION_SCHEME=normalized_sum python -m scripts.compositions.composition_scoring
 
     # Split for HPC where compute nodes have no outbound network:
     #   stage 1 (compute / GPU, no internet): generate completions + trajectory parquets
-    COMPOSITION_MODE=generate python -m scripts.compositions.composition_scoring
+    COMPOSITION_SCHEME=normalized_sum COMPOSITION_MODE=generate python -m scripts.compositions.composition_scoring
     #   stage 2 (login / no GPU, internet):   judge CSVs + aggregate + tau + summary JSON
-    COMPOSITION_MODE=judge    python -m scripts.compositions.composition_scoring
+    COMPOSITION_SCHEME=normalized_sum COMPOSITION_MODE=judge    python -m scripts.compositions.composition_scoring
 """
 
 from __future__ import annotations
@@ -75,9 +81,53 @@ JUDGE_MODEL = "gpt-4.1-mini"
 HIDDEN_LAYER = 17
 HOOK_LAYER_IDX = HIDDEN_LAYER - 1
 
-# Per-trait coefficient applied to each unit vector before summing into the joint
-# steering direction.
-COMPOSITION_ALPHA = 4.0
+# --- Composition scheme ------------------------------------------------------
+# Selected via COMPOSITION_SCHEME so the three additive injection schemes run
+# from this single driver and write to disjoint output trees. The judge/aggregate
+# helpers import the resolved constants below, so run them with the same env var.
+#   normalize : passed straight to compose_steering_vector.
+#   alpha     : injection coefficient on the unit-vector sum.
+#   dataset   : output-tree name under results/composition/.
+#   log_prefix: per-pair log filename prefix under logs/.
+#   injection : closed-form delta, recorded in the summary JSON.
+SCHEMES: dict[str, dict] = {
+    # Appendix F exploratory baseline: ‖δ‖ varies with cosine.
+    "unnormalized_sum": {
+        "normalize": False,
+        "alpha": 4.0,
+        "dataset": "unnormalized_sum_a4",
+        "log_prefix": "composition",
+        "injection": "h += alpha * (v_a_unit + v_b_unit)",
+    },
+    # Paper Eq (2): total injection norm fixed at alpha.
+    "normalized_sum": {
+        "normalize": True,
+        "alpha": 4.5,
+        "dataset": "normalized_sum_a4.5",
+        "log_prefix": "composition_v2",
+        "injection": "h += alpha * (v_a_unit + v_b_unit) / ||v_a_unit + v_b_unit||",
+    },
+    # Paper Eq (3): per-axis projection push fixed at alpha.
+    "projection_controlled": {
+        "normalize": "per_axis",
+        "alpha": 4.5,
+        "dataset": "projection_controlled_a4.5",
+        "log_prefix": "composition_v3",
+        "injection": "h += (alpha / (1 + cos)) * (v_a_unit + v_b_unit)",
+    },
+}
+
+COMPOSITION_SCHEME = os.environ.get("COMPOSITION_SCHEME", "unnormalized_sum").lower()
+if COMPOSITION_SCHEME not in SCHEMES:
+    raise SystemExit(
+        f"COMPOSITION_SCHEME must be one of {sorted(SCHEMES)}, got {COMPOSITION_SCHEME!r}"
+    )
+_SCHEME = SCHEMES[COMPOSITION_SCHEME]
+
+COMPOSITION_ALPHA: float = _SCHEME["alpha"]
+COMPOSITION_NORMALIZE: bool | str = _SCHEME["normalize"]
+LOG_PREFIX: str = _SCHEME["log_prefix"]
+INJECTION_DESC: str = _SCHEME["injection"]
 
 # LLM-judge stage settings.
 N_PER_QUESTION = 5
@@ -88,8 +138,9 @@ MAX_CONCURRENT_JUDGES = 5
 
 VECTOR_OUTPUT_DIR = Path("results/persona_vectors/Llama-3.1-8B-Instruct")
 COMPOSITION_DATA_DIR = Path("data/composition_eval")
-SCORES_OUTPUT_DIR = Path("results/composition/unnormalized_sum_a4/scoring/Llama-3.1-8B-Instruct")
-SUMMARY_OUT_PATH = Path("results/composition/unnormalized_sum_a4/scoring/summary.json")
+_DATASET_ROOT = Path("results/composition") / _SCHEME["dataset"]
+SCORES_OUTPUT_DIR = _DATASET_ROOT / "scoring" / "Llama-3.1-8B-Instruct"
+SUMMARY_OUT_PATH = _DATASET_ROOT / "scoring" / "summary.json"
 LOGS_DIR = Path("logs")
 
 # --- Trajectory dataset ------------------------------------------------------
@@ -97,8 +148,8 @@ LOGS_DIR = Path("logs")
 # behaviour) at the operating point. Settings are the single-vector probes
 # (1,0)/(0,1) and the joint probe (1,1).
 TRAJECTORY_SETTINGS: list[tuple[int, int]] = [(1, 0), (0, 1), (1, 1)]
-TRAJECTORY_OUT_DIR = Path("results/composition/unnormalized_sum_a4/trajectories/Llama-3.1-8B-Instruct")
-TRAJECTORY_AGG_PARQUET = Path("results/composition/unnormalized_sum_a4/trajectories/aggregate.parquet")
+TRAJECTORY_OUT_DIR = _DATASET_ROOT / "trajectories" / "Llama-3.1-8B-Instruct"
+TRAJECTORY_AGG_PARQUET = _DATASET_ROOT / "trajectories" / "aggregate.parquet"
 
 # Regime classification thresholds - applied to ratio(Δ_joint / Δ_single) per axis.
 # Δ_joint = composition setting (1,1) Δ on a given trait vs baseline (0,0);
@@ -413,7 +464,7 @@ def _run_single_steered_composition(
     if mode in ("generate", "full"):
         delta = compose_steering_vector(
             [(v_a_unit, float(w_a)), (v_b_unit, float(w_b))],
-            alpha=alpha, normalize=False,
+            alpha=alpha, normalize=COMPOSITION_NORMALIZE,
         )
         _generate_completions_csv(
             out_csv, model, tok, artifact,
@@ -506,7 +557,7 @@ def _capture_trajectories_for_pair(
         w_a, w_b = setting
         delta = compose_steering_vector(
             [(v_a_steer, float(w_a)), (v_b_steer, float(w_b))],
-            alpha=alpha, normalize=False,
+            alpha=alpha, normalize=COMPOSITION_NORMALIZE,
         )
         for prompt_id, (q, ans) in enumerate(zip(df["question"], df["answer"])):
             question_id = prompt_id // N_PER_QUESTION
@@ -555,7 +606,7 @@ TAU_RECIPE = "R2_split_half_bootstrap_q95_x1.5"
 TAU_FACTOR = 1.5
 TAU_BOOTSTRAP_DRAWS = 1000
 TAU_Q = 0.95
-TAU_OUT_PATH = Path("results/composition/unnormalized_sum_a4/trajectories/tau.json")
+TAU_OUT_PATH = _DATASET_ROOT / "trajectories" / "tau.json"
 
 
 def _calibrate_tau_r2(
@@ -633,12 +684,14 @@ def _l17_sanity_check(
     df_pair: pd.DataFrame, trait_a: str, trait_b: str,
     alpha: float, cos_ij: float,
 ) -> dict:
-    """Closed form at L=L* on completion-divergence-noisy means:
-    pi_a^(1,1)(L*) - pi_a^(1,0)(L*) ~= alpha*cos(v_a, v_b)
-    pi_b^(1,1)(L*) - pi_b^(0,1)(L*) ~= alpha*cos(v_a, v_b)
-    Reports observed vs predicted; tolerance is loose because completions
-    differ across settings.
+    """Closed-form Δπ_a = π_a^(1,1)(L*) - π_a^(1,0)(L*) at L*=17, by scheme:
+        unnormalized_sum:      Δπ_a ~= alpha * cos
+        normalized_sum:        Δπ_a ~= alpha * (sqrt((1+cos)/2) - 1)
+        projection_controlled: Δπ_a  = 0   (per-axis push held at alpha)
+    All three are reported side by side; `pred_diff` is the active scheme's
+    prediction. Tolerance is loose because completions differ across settings.
     """
+    import math
     L = HIDDEN_LAYER
     sub = df_pair[df_pair["layer"] == L]
 
@@ -652,9 +705,19 @@ def _l17_sanity_check(
     pi_b_01 = _mean_at(1, 0.0, alpha)
     pi_b_11 = _mean_at(1, alpha, alpha)
 
-    pred = alpha * cos_ij
+    one_plus_cos = max(1.0 + cos_ij, 1e-9)
+    preds = {
+        "unnormalized_sum": alpha * cos_ij,
+        "normalized_sum": alpha * (math.sqrt(one_plus_cos / 2.0) - 1.0),
+        "projection_controlled": 0.0,
+    }
     return {
-        "layer": L, "alpha": alpha, "cos": cos_ij, "pred_a_cos": pred,
+        "layer": L, "alpha": alpha, "cos": cos_ij,
+        "scheme": COMPOSITION_SCHEME,
+        "pred_diff": preds[COMPOSITION_SCHEME],
+        "pred_diff_unnormalized_sum": preds["unnormalized_sum"],
+        "pred_diff_normalized_sum": preds["normalized_sum"],
+        "pred_diff_projection_controlled": preds["projection_controlled"],
         "obs_pi_a_diff": pi_a_11 - pi_a_10,
         "obs_pi_b_diff": pi_b_11 - pi_b_01,
     }
@@ -668,7 +731,10 @@ def main() -> None:
         raise SystemExit(
             f"COMPOSITION_MODE must be one of generate|judge|full, got {mode!r}"
         )
-    print(f"COMPOSITION_MODE={mode}")
+    print(
+        f"COMPOSITION_MODE={mode}  COMPOSITION_SCHEME={COMPOSITION_SCHEME}  "
+        f"(normalize={COMPOSITION_NORMALIZE!r}, alpha={COMPOSITION_ALPHA})"
+    )
 
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     SCORES_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -714,24 +780,28 @@ def main() -> None:
             print(f"  WARNING: {e}")
 
     pairs = _composition_pairs()
-    print(f"\nEvaluating {len(pairs)} composition pairs at α={COMPOSITION_ALPHA}")
+    n_pairs = len(pairs)
+    print(
+        f"\nEvaluating {n_pairs} composition pairs at α={COMPOSITION_ALPHA}, "
+        f"scheme={COMPOSITION_SCHEME}"
+    )
     print("=" * 72)
     if mode == "generate":
         print(
-            "GENERATE STAGE - for each of 36 pairs, produce 4 CSVs of LLM completions\n"
+            f"GENERATE STAGE - for each of {n_pairs} pairs, produce 4 CSVs of LLM completions\n"
             "  (baseline, single_a, single_b, joint) + 1 trajectory parquet.\n"
             f"  CSVs written under   {SCORES_OUTPUT_DIR}\n"
             f"  parquets written to  {TRAJECTORY_OUT_DIR}\n"
-            f"  per-pair logs at     {LOGS_DIR}/composition_<a>__<b>_*.log\n"
+            f"  per-pair logs at     {LOGS_DIR}/{LOG_PREFIX}_<a>__<b>_*.log\n"
             "  CSV score columns left as NaN - judge stage runs off-cluster.\n"
-            "  Tail progress:  tail -F logs/composition_<pair>_*.log"
+            f"  Tail progress:  tail -F logs/{LOG_PREFIX}_<pair>_*.log"
         )
     elif mode == "judge":
         print(
-            "JUDGE STAGE - for each of 36 pairs, read 4 CSVs from disk and fill\n"
+            f"JUDGE STAGE - for each of {n_pairs} pairs, read 4 CSVs from disk and fill\n"
             "  NaN score columns by calling OpenAI judge (trait_a, trait_b, coherence).\n"
             f"  CSVs read+written under  {SCORES_OUTPUT_DIR}\n"
-            f"  per-pair logs at         {LOGS_DIR}/composition_<a>__<b>_*.log\n"
+            f"  per-pair logs at         {LOGS_DIR}/{LOG_PREFIX}_<a>__<b>_*.log\n"
             "  [judge] done/total progress lines emitted to this stdout every 25 rows."
         )
     else:
@@ -766,13 +836,13 @@ def main() -> None:
         cos_ab = float((v_a_raw @ v_b_raw).item())
 
         # --- Per-setting CSVs (mode-gated generate + judge stages) ---
-        base_log = LOGS_DIR / f"composition_{a}__{b}_baseline.log"
+        base_log = LOGS_DIR / f"{LOG_PREFIX}_{a}__{b}_baseline.log"
         base_csv = _baseline_csv_path(a, b)
         print(f"  baseline                  -> {base_csv.name}")
         base = _run_baseline_composition(a, b, artifact, model, tok, base_log, mode)
         print(f"    {_csv_status(base_csv)}    log={base_log.name}")
 
-        single_a_log = LOGS_DIR / f"composition_{a}__{b}_single_a_alpha{COMPOSITION_ALPHA}.log"
+        single_a_log = LOGS_DIR / f"{LOG_PREFIX}_{a}__{b}_single_a_alpha{COMPOSITION_ALPHA}.log"
         single_a_csv = _single_csv_path(a, b, "a", COMPOSITION_ALPHA)
         print(f"  single_a (1,0) α={COMPOSITION_ALPHA}    -> {single_a_csv.name}")
         single_a = _run_single_steered_composition(
@@ -780,7 +850,7 @@ def main() -> None:
         )
         print(f"    {_csv_status(single_a_csv)}    log={single_a_log.name}")
 
-        single_b_log = LOGS_DIR / f"composition_{a}__{b}_single_b_alpha{COMPOSITION_ALPHA}.log"
+        single_b_log = LOGS_DIR / f"{LOG_PREFIX}_{a}__{b}_single_b_alpha{COMPOSITION_ALPHA}.log"
         single_b_csv = _single_csv_path(a, b, "b", COMPOSITION_ALPHA)
         print(f"  single_b (0,1) α={COMPOSITION_ALPHA}    -> {single_b_csv.name}")
         single_b = _run_single_steered_composition(
@@ -788,7 +858,7 @@ def main() -> None:
         )
         print(f"    {_csv_status(single_b_csv)}    log={single_b_log.name}")
 
-        steer_log = LOGS_DIR / f"composition_{a}__{b}_alpha{COMPOSITION_ALPHA}.log"
+        steer_log = LOGS_DIR / f"{LOG_PREFIX}_{a}__{b}_alpha{COMPOSITION_ALPHA}.log"
         steer_csv = _steered_csv_path(a, b, COMPOSITION_ALPHA)
         print(f"  joint    (1,1) α={COMPOSITION_ALPHA}    -> {steer_csv.name}")
         steered = _run_joint_steered_composition(
@@ -851,7 +921,7 @@ def main() -> None:
             sanity = _l17_sanity_check(df_traj, a, b, COMPOSITION_ALPHA, cos_ab)
             print(
                 f"  L={sanity['layer']} sanity: cos={cos_ab:+.3f}  "
-                f"pred α·cos={sanity['pred_a_cos']:+.3f}  "
+                f"pred[{COMPOSITION_SCHEME}]={sanity['pred_diff']:+.3f}  "
                 f"obs Δπ_a={sanity['obs_pi_a_diff']:+.3f}  "
                 f"obs Δπ_b={sanity['obs_pi_b_diff']:+.3f}"
             )
@@ -902,8 +972,9 @@ def main() -> None:
                 "judge_model": JUDGE_MODEL,
                 "layer": HIDDEN_LAYER,
                 "alpha": COMPOSITION_ALPHA,
+                "composition_scheme": COMPOSITION_SCHEME,
                 "vector_normalisation": "unit",
-                "injection": "h += alpha * (v_a_unit + v_b_unit)",
+                "injection": INJECTION_DESC,
                 "polarity_inverted_for_steering": sorted(POLARITY_INVERTED),
                 "projection_axis": "raw_direction_no_polarity_flip",
                 "n_per_question": N_PER_QUESTION,
@@ -923,9 +994,9 @@ def main() -> None:
     print()
     print("=" * 72)
     print(f"STAGE TALLY ({mode})")
-    print(f"  CSVs on disk          : {n_csvs}  (expected 36 pairs × 4 = 144)")
+    print(f"  CSVs on disk          : {n_csvs}  (expected {n_pairs} pairs × 4 = {n_pairs * 4})")
     print(f"  CSVs with judge scores: {n_scored_csvs}")
-    print(f"  Per-pair parquets     : {n_parquets}  (expected 36)")
+    print(f"  Per-pair parquets     : {n_parquets}  (expected {n_pairs})")
     print("=" * 72)
 
     if mode == "generate":

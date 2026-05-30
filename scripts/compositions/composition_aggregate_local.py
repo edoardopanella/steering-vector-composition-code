@@ -165,7 +165,7 @@ def main() -> None:
             df_traj = pd.read_parquet(traj_path)
             sanity = _l17_sanity_check(df_traj, a, b, COMPOSITION_ALPHA, cos_ab)
             print(
-                f"  L={sanity['layer']} sanity: pred α·cos={sanity['pred_a_cos']:+.3f}  "
+                f"  L={sanity['layer']} sanity: pred[{sanity['scheme']}]={sanity['pred_diff']:+.3f}  "
                 f"obs Δπ_a={sanity['obs_pi_a_diff']:+.3f}  "
                 f"obs Δπ_b={sanity['obs_pi_b_diff']:+.3f}"
             )
