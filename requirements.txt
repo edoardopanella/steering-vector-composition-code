@@ -1,0 +1,104 @@
+# ============================================================
+# compose-or-collide: Predicting Behavior Composition from
+# Steering-Vector Geometry
+# ============================================================
+#
+# This file contains dependencies IDENTICAL across all environments.
+# PyTorch must be installed first, separately, for your platform:
+#
+#   Mac:
+#     pip install -r requirements-mac.txt
+#
+#   HPC cluster (CUDA 12.1):
+#     pip install torch==2.6.0 torchvision==0.21.0 \
+#         --index-url https://download.pytorch.org/whl/cu121
+#     pip install -r requirements-hpc.txt
+#
+# After either of the above, run:
+#     pip install -r requirements.txt
+#
+# Python 3.11 required.
+# ============================================================
+
+
+# ------------------------------------------------------------
+# Model loading and activation extraction
+# ------------------------------------------------------------
+transformer-lens==3.0.0       # Hook-based activation extraction — upgraded from 2.18.0
+                               # (2.18.0 required pandas<2.1 which conflicted with pandas 2.x)
+transformers==4.57.6           # HuggingFace model hub and tokenizers (>=4.56 required by TL 3.0.0)
+accelerate==1.1.1              # Device mapping and mixed precision for large models
+huggingface-hub==0.36.2        # Model and dataset downloading from HuggingFace Hub
+                               # must be >=0.34.0,<1.0 (transformers constraint)
+                               # and >=0.23.2 (transformer-lens constraint)
+                               # 0.36.2 is the latest version satisfying both
+tokenizers==0.22.2             # Fast tokenizer backend
+                               # must be >=0.22.0,<=0.23.0 (transformers 4.57.6 constraint)
+                               # 0.22.2 is the latest version satisfying this range
+safetensors==0.4.5             # Efficient model weight format used by Llama 3.1
+
+# ------------------------------------------------------------
+# Required by TransformerLens 3.0.0
+# (these are new compared to 2.18.0 — do not remove)
+# ------------------------------------------------------------
+einops==0.8.0                  # Tensor manipulation
+jaxtyping==0.2.36              # Type annotations for tensor shapes
+typeguard==4.4.1               # Runtime type checking (required by jaxtyping + TL 3.0.0)
+rich==13.9.4                   # Pretty terminal output (required by TL 3.0.0)
+sentencepiece==0.2.1           # Tokenizer backend for some models (required by TL 3.0.0)
+transformers-stream-generator==0.0.5  # Streaming generation (required by TL 3.0.0)
+wandb==0.19.11                 # Experiment tracking (required by TL 3.0.0; also useful for logging)
+beartype==0.14.1               # Runtime type checking for TL internal use
+fancy-einsum==0.0.3            # Einstein summation (required by TL)
+better-abc==0.0.3              # Abstract base class utilities (required by TL)
+
+# ------------------------------------------------------------
+# Datasets
+# ------------------------------------------------------------
+datasets==3.1.0                # HuggingFace datasets (MWE, HaluEval, etc.)
+
+# ------------------------------------------------------------
+# Numerical computing and linear algebra
+# (PCA, cosine similarity, Gram matrices, subspace angles,
+# Procrustes alignment, participation ratio)
+# ------------------------------------------------------------
+numpy==1.26.4                  # Core numerical operations
+scipy==1.14.1                  # subspace_angles, KS test, Procrustes, Mann-Whitney
+scikit-learn==1.5.2            # PCA, logistic regression, AUC, bootstrap utilities
+
+# ------------------------------------------------------------
+# Experiment management and data handling
+# ------------------------------------------------------------
+pandas==2.2.3                  # Data frames for storing results and scores
+                               # (compatible with TL 3.0.0 — was blocked by TL 2.18.0)
+tqdm==4.67.0                   # Progress bars for generation and extraction loops
+pyyaml==6.0.2                  # Config file loading
+python-dotenv==1.0.1           # Load API keys from .env file
+
+# ------------------------------------------------------------
+# LLM-as-judge (behavior expression scoring)
+# ------------------------------------------------------------
+openai==1.54.4                 # GPT-4o judge API
+httpx==0.27.0                  # pinned: openai 1.54.4 requires httpx<0.28; newer versions break AsyncOpenAI init
+anthropic==0.39.0              # Claude judge API (robustness check)
+tiktoken==0.8.0                # Token counting for judge prompt construction
+
+# ------------------------------------------------------------
+# Visualization
+# ------------------------------------------------------------
+matplotlib==3.9.2              # Core plotting library
+seaborn==0.13.2                # Clustered heatmaps for Gram matrices
+
+# ------------------------------------------------------------
+# Jupyter (for exploration and figure iteration)
+# ------------------------------------------------------------
+jupyter==1.1.1
+ipykernel==6.29.5
+ipywidgets==8.1.5              # Progress bars inside notebooks
+
+# ------------------------------------------------------------
+# Code quality
+# ------------------------------------------------------------
+black==24.10.0                 # Code formatter — run before every commit
+isort==5.13.2                  # Import sorter
+pytest==8.3.3                  # Unit tests for analysis utilities

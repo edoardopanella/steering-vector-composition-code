@@ -1,0 +1,30 @@
+# ============================================================
+# Mac development environment
+# ============================================================
+# For local iteration, debugging, and small-scale tests on
+# your Mac. Uses CPU or MPS (Apple Silicon GPU) rather than CUDA.
+#
+# Install order:
+#   1. python3.11 -m venv venv
+#   2. source venv/bin/activate
+#   3. pip install --upgrade pip
+#   4. pip install -r requirements-mac.txt
+#   5. pip install -r requirements.txt
+#
+# Note on MPS: PyTorch's Apple Silicon backend (MPS) is
+# supported but not all operations used by TransformerLens
+# are available on MPS. For stability on Mac, we default to
+# CPU. If you want to experiment with MPS, set:
+#   device = "mps" if torch.backends.mps.is_available() else "cpu"
+# but expect occasional fallback warnings.
+#
+# IMPORTANT: do not attempt to load Llama-3.1-8B in full
+# precision on your Mac. It will not fit in RAM on most
+# machines and will be painfully slow even if it does.
+# Use Mac only for: pipeline development, unit tests, small
+# sanity checks with a tiny model (e.g., gpt2-small).
+# ============================================================
+
+# CPU build of PyTorch (works on both Apple Silicon and Intel Macs)
+torch==2.5.1
+torchvision==0.20.1

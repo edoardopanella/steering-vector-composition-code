@@ -1,0 +1,86 @@
+# ============================================================
+# compose-or-collide .gitignore
+# ============================================================
+
+# --- Secrets and credentials ---
+.env
+*.pem
+*.key
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# --- Model weights and checkpoints ---
+# These are large binary files — download from HuggingFace at runtime
+*.bin
+*.safetensors
+
+# Avoid large vectors besides the extracted behavioral
+*.pt
+!results/vectors/*.pt
+!results/anthropic_repl/persona_vectors/**/*.pt
+!results/anthropic_repl/trajectory_pilot_l17/**/projections.pt
+
+# --- Anthropic-replication preserved-broken-run artifacts ---
+# These are the rate-limit-decimated first attempt of stage 1; kept locally for
+# diagnosis but not tracked.
+results/anthropic_repl/eval_persona_extract/**/*.first_run
+
+*.pth
+*.ckpt
+checkpoints/
+models/
+
+# --- Activation cache ---
+# Extracted activations can be hundreds of GB — never commit
+activations/
+*.pkl
+*.npy
+*.npz
+
+# --- Results and outputs ---
+# Commit only final figures and tables, not raw result dumps
+results/raw/
+
+# --- Experiment logs ---
+wandb/
+runs/
+logs/
+*.log
+mlruns/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Temporary files ---
+tmp/
+temp/
+scratch/
+
+# --- Papers' images ---
+papers/***/**/*.png
+papers/***/**/*.jpeg
+papers/***/**/*.json
