@@ -1,5 +1,5 @@
 """
-rq1_filtering.py
+filtering.py
 
 Documents the two a-priori filters applied before the RQ1 statistical analysis,
 each motivated with data from the consolidated frames. Just run this file
@@ -7,8 +7,8 @@ directly - no terminal arguments needed.
 
 It reads
 
-    analysis/rq1_consolidated/consolidated_coh30.csv   (filtered at coh >= 30)
-    analysis/rq1_consolidated/consolidated_raw.csv      (no coherence filter)
+    analysis/frames/consolidated_coh30.csv   (filtered at coh >= 30)
+    analysis/frames/consolidated_raw.csv      (no coherence filter)
 
 and reports the three filters, in order:
 
@@ -54,7 +54,7 @@ normFalse's mean.
 
 Output (results regenerated each run; `## Conclusions` preserved):
 
-    analysis/filtering/rq1_filtering.{md,json}
+    analysis/filtering/filtering.{md,json}
 """
 
 import json
@@ -79,10 +79,10 @@ SCHEME_LABEL = {
 }
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-COH30_CSV = REPO_ROOT / "analysis/rq1_consolidated/consolidated_coh30.csv"
-RAW_CSV = REPO_ROOT / "analysis/rq1_consolidated/consolidated_raw.csv"
+COH30_CSV = REPO_ROOT / "analysis/frames/consolidated_coh30.csv"
+RAW_CSV = REPO_ROOT / "analysis/frames/consolidated_raw.csv"
 OUT_DIR = REPO_ROOT / "analysis/filtering"
-OUT_STEM = "rq1_filtering"
+OUT_STEM = "filtering"
 
 # Everything from this header down is hand-written and preserved across reruns.
 CONCLUSIONS_HEADER = "## Conclusions"

@@ -9,14 +9,12 @@ It reads the consolidated (coh≥30) frame, fits the per-scheme regression
 **per-axis** (`per_axis`) schemes, and recomputes β_cos's p-value with the
 exhaustive dyadic node-permutation null. It writes one combined report:
 
-    analysis/results/RQ1/perscheme_nodeperm_analysis/perscheme_nodeperm_analysis.{md,json}
+    analysis/node_permutation/node_permutation.{md,json}
 
 The `## Conclusions` section of the .md is preserved across re-runs.
-
-Script port of analysis/notebooks/rq1_perscheme_nodeperm.ipynb.
 """
 
-from nodeperm_analysis_scripts import run_nodeperm_analysis
+from node_permutation_lib import run_nodeperm_analysis
 
 # --------------------------------------------------------------------------- #
 # Parameters - edit these, then run the file.
