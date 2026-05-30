@@ -1,9 +1,9 @@
 """
-Quick diagnostic — vector norms at L=17 for every Anthropic-pipeline trait, plus
-correlation between norm and α=2 effect size on the 9 validated keepers.
+Quick diagnostic - vector norms at L=17 for every extracted trait, plus the
+correlation between norm and alpha=2 effect size on the validated keepers.
 
-Reads the response_avg_diff stacks saved by run_extract_all (E7.6) and the
-α-sweep summary saved by run_validation_all_layer17 (E9.7).
+Reads the response_avg_diff stacks saved by run_extract_all and the alpha-sweep
+summary saved by run_validation_all_layer17.
 
 Run locally (no GPU, no API):
     venv/bin/python scripts/validation/check_norms_layer17.py
@@ -27,7 +27,7 @@ def collect_norms() -> dict[str, float]:
         trait = f.stem.replace("_response_avg_diff", "")
         v = torch.load(f, map_location="cpu", weights_only=True)
         if v.ndim != 2 or v.shape[0] <= HIDDEN_LAYER:
-            print(f"  WARNING: {f.name} unexpected shape {tuple(v.shape)} — skipping")
+            print(f"  WARNING: {f.name} unexpected shape {tuple(v.shape)} - skipping")
             continue
         norms[trait] = v[HIDDEN_LAYER].norm().item()
     return norms
@@ -91,11 +91,11 @@ def main() -> None:
     for t, n in items:
         e = effects.get(t)
         if e is None:
-            jdt, lps = "    —", "    —"
+            jdt, lps = "    -", "    -"
         else:
             jdt = f"{e['delta_trait']:+11.2f}"
             lps = f"{e['lp_shift']:+11.4f}"
-        # α-equivalent: raw α=2 ≈ unit α = 2·‖v‖ — show inverse so readers see "raw α=2 ≡ unit α=X".
+        # α-equivalent: raw α=2 ≈ unit α = 2·‖v‖ - show inverse so readers see "raw α=2 ≡ unit α=X".
         unit_alpha_equiv = 2.0 * n
         print(f"{t:<18} {n:>8.3f} {unit_alpha_equiv:>9.3f}  {jdt}  {lps}")
 

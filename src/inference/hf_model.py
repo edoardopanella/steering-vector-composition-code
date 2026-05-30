@@ -24,7 +24,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def _log(msg: str) -> None:
-    """Stage print that also flushes — slurm stdout is line-buffered with -u
+    """Stage print that also flushes - process stdout is line-buffered with -u
     but `redirect_stdout` capture (used elsewhere) can mask flushes, so emit
     to the real fd directly with a timestamp."""
     print(f"[hf_model {time.strftime('%H:%M:%S')}] {msg}", file=sys.__stdout__, flush=True)
@@ -36,7 +36,7 @@ def _resolve_local_snapshot(model_name: str) -> str:
     Why: transformers >= 4.46 calls `model_info(model_id)` inside the tokenizer
     loader (`_patch_mistral_regex`) to detect base-Mistral checkpoints. That
     metadata call has no cache fallback, so on a networkless compute node it
-    hard-fails (errno 101) — or worse, waits for a TCP timeout that never
+    hard-fails (errno 101) - or worse, waits for a TCP timeout that never
     arrives because the cluster firewall drops outbound packets without RST.
     Passing a local path triggers the `_is_local` short-circuit, which skips
     the metadata lookup entirely.
@@ -79,7 +79,7 @@ def load_hf_model(
         free, total = torch.cuda.mem_get_info()
         _log(f"cuda: device={torch.cuda.get_device_name(0)}  free={free/1e9:.1f}G / total={total/1e9:.1f}G")
     else:
-        _log("cuda: NOT available — model will load on CPU")
+        _log("cuda: NOT available - model will load on CPU")
     _log(f"from_pretrained: weights, dtype={dtype}, device_map={device_map}")
     t0 = time.time()
     model = AutoModelForCausalLM.from_pretrained(
@@ -125,12 +125,12 @@ def steering_hook(
     `coeff * vector` to the block's output residual stream.
 
     positions:
-        "all"      — every token position (used during teacher-forced extraction).
-        "response" — last token only. During autoregressive decoding this is the
+        "all"      - every token position (used during teacher-forced extraction).
+        "response" - last token only. During autoregressive decoding this is the
                      newly-generated token at every step, so the cumulative effect
                      is "perturb every response token". Matches Anthropic's
                      ActivationSteerer(positions="response") for inference.
-        "prompt"   — every token in the prefill. Requires prompt_len for masked steering.
+        "prompt"   - every token in the prefill. Requires prompt_len for masked steering.
 
     The hook fires on the *output* of model.model.layers[layer_idx], which equals
     `hidden_states[layer_idx + 1]` from output_hidden_states=True. So if you build a

@@ -2,7 +2,7 @@
 nodeperm_analysis.py
 
 Runner for the RQ1 per-scheme decomposition with the exact 8! node-permutation
-(MRQAP) test. Just run this file directly — no terminal arguments needed.
+(MRQAP) test. Just run this file directly - no terminal arguments needed.
 
 It reads the consolidated (coh≥30) frame, fits the per-scheme regression
 `y ~ mean_single_abs + max_single_abs + cos` for the **norm** (`normTrue`) and
@@ -19,7 +19,7 @@ Script port of analysis/notebooks/rq1_perscheme_nodeperm.ipynb.
 from nodeperm_analysis_scripts import run_nodeperm_analysis
 
 # --------------------------------------------------------------------------- #
-# Parameters — edit these, then run the file.
+# Parameters - edit these, then run the file.
 # --------------------------------------------------------------------------- #
 N_EDGE_PERM = 10000     # Monte-Carlo iters for the edge-wise comparison in §2
                         # (the node-perm test itself is always exhaustive, n!)

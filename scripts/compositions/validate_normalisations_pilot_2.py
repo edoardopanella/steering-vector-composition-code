@@ -1,21 +1,22 @@
 """
-PILOT 2 — composition normalisation follow-up (Phase 15).
+Pilot 2: composition normalisation follow-up.
 
 After pilot 1 (validate_normalisations_pilot.py) showed that:
-  - normalize=True wins on coherence but under-doses (vs E10.4's calibrated 5-7
-    magnitude range; ‖δ‖ pinned at α=4 always),
-  - per_axis at α=4 breaks coherence on antipodal pairs (‖δ‖→8 at cos=-0.52),
+  - normalized-sum (normalize=True) wins on coherence but under-doses (its total
+    perturbation norm ‖δ‖ is pinned at α=4, below the calibrated single-trait
+    magnitude range),
+  - projection-controlled (normalize="per_axis") at α=4 breaks coherence on
+    antipodal pairs (‖δ‖ rises toward 8 at cos=-0.52),
 
-we add three new joint conditions on the same 6 pilot pairs:
+we add new joint conditions on the same pilot pairs:
 
-  (α=5, normalize=True)   — directly tests the "honor E10.4's calibrated dose"
-  (α=6, normalize=True)   — same idea, one step further into E10.4's joint range
-  (α=3, normalize=per_axis) — tests whether per_axis is salvageable at lower α
-                              (‖δ‖ at cos=-0.52 drops 8→6.12)
+  (α=5, normalize=True)     - pushes the normalized-sum dose into the calibrated range
+  (α=6, normalize=True)     - same idea, one step further
+  (α=3, normalize=per_axis) - tests whether projection-controlled is salvageable
+                              at lower α (‖δ‖ at cos=-0.52 drops 8→6.12)
 
 The shared baseline + 2 singles at α=4 from pilot 1 ALL remain on disk and are
-reused — no regeneration needed. This script only emits the 3 NEW joint CSVs
-per pair = 18 new CSVs total.
+reused - no regeneration needed. This script only emits the NEW joint CSVs.
 
 Outputs land in the same dir as pilot 1
 (results/pilots/composition_normalisations/Llama-3.1-8B-Instruct/) with
@@ -42,7 +43,7 @@ from dotenv import load_dotenv
 
 from src.inference.hf_model import load_hf_model
 
-# Reuse all the heavy lifting from pilot 1 — same helpers, same CSV conventions.
+# Reuse all the heavy lifting from pilot 1 - same helpers, same CSV conventions.
 from scripts.compositions.validate_normalisations_pilot import (
     LOGS_DIR,
     PILOT_PAIRS,
@@ -63,13 +64,15 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Pilot 2 specific config
 # ---------------------------------------------------------------------------
-# Each entry is (alpha, normalize_mode). Joint condition only — singles +
+# Each entry is (alpha, normalize_mode). Joint condition only - singles +
 # baseline are inherited from pilot 1 and not regenerated here.
 PILOT_2_JOINT_CONDITIONS: list[tuple[float, bool | str]] = [
     (5.0, True),
     (6.0, True),
     (3.0, "per_axis"),
-    # Fine-sweep additions for the paper's dose-response figure (Riccardo).
+    # Fine-sweep additions for the dose-response figure. These bracket α=4.5,
+    # which the effect-vs-coherence utility tradeoff selects as the operating
+    # point for the normalized-sum mode.
     (4.5, True),
     (5.5, True),
 ]
@@ -100,7 +103,7 @@ def main() -> None:
     else:
         print("Judge mode: skipping HF model load.\n")
 
-    # Pre-load vectors for all 6 pilot pairs.
+    # Pre-load vectors for all pilot pairs.
     traits_needed = sorted({t for pair in PILOT_PAIRS for t in pair})
     unit_vectors: dict[str, torch.Tensor] = {}
     for t in traits_needed:
@@ -177,15 +180,15 @@ def main() -> None:
         1 for p in SCORES_OUTPUT_DIR.glob("*.csv") if _csv_has_scores(p)
     )
     expected_total = (
-        len(PILOT_PAIRS) * 6  # pilot 1 leaves 36 CSVs on disk (baseline+singles+3 modes at α=4)
-        + len(PILOT_PAIRS) * len(PILOT_2_JOINT_CONDITIONS)  # plus 18 from pilot 2
+        len(PILOT_PAIRS) * 6  # pilot 1 leaves 6 CSVs per pair (baseline + 2 singles + 3 modes at α=4)
+        + len(PILOT_PAIRS) * len(PILOT_2_JOINT_CONDITIONS)  # plus the new pilot-2 joint conditions
     )
     print()
     print("=" * 72)
     print(f"PILOT 2 STAGE TALLY ({mode})")
     print(
         f"  CSVs on disk          : {n_csvs}  "
-        f"(expected {expected_total} = 36 from pilot 1 + 18 new)"
+        f"(expected {expected_total} = pilot 1 + new pilot-2 conditions)"
     )
     print(f"  CSVs with judge scores: {n_scored}")
     print("=" * 72)
@@ -194,7 +197,7 @@ def main() -> None:
         print(
             "\nGenerate done. Run judging off-cluster:\n"
             "  python -m scripts.compositions.validate_normalisations_judge_local\n"
-            "  (the existing judge wrapper will pick up the new CSVs automatically — they live in the same dir)"
+            "  (the existing judge wrapper will pick up the new CSVs automatically - they live in the same dir)"
         )
         return
 

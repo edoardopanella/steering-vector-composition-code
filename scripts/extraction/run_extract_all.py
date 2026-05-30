@@ -30,10 +30,9 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-# All 15 traits we want vectors for: Anthropic's 7 released + the 8 generated
-# in scripts.extraction.generate_trait_artifacts. Skip-if-exists logic in
-# main() means it's safe to re-run; already-done traits (evil, sycophantic,
-# hallucinating from Phase 7.x) will be no-ops.
+# All traits we want vectors for: Anthropic's released set plus the traits
+# generated in scripts.extraction.generate_trait_artifacts. Skip-if-exists logic
+# in main() means it's safe to re-run; already-done traits will be no-ops.
 TRAITS = [
     # Anthropic-released
     "apathetic",
@@ -43,7 +42,7 @@ TRAITS = [
     "impolite",
     "optimistic",
     "sycophantic",
-    # Project-generated (E7.5 — see experiments_log)
+    # Project-generated
     "agreeableness",
     "confidence",
     "corrigibility",
@@ -142,16 +141,16 @@ def main() -> None:
             needs_stage1.append(trait)
 
     # ---------------------------------------------------------------------------
-    # Phase A — Stage 1: generation + judging (model loaded once)
+    # Stage 1: generation + judging (model loaded once)
     # ---------------------------------------------------------------------------
     if needs_stage1:
-        print(f"Loading {MODEL_NAME} for Stage 1 ({len(needs_stage1)} traits) …")
+        print(f"Loading {MODEL_NAME} for Stage 1 ({len(needs_stage1)} traits) ...")
         model, tok = load_hf_model(MODEL_NAME)
         print(f"Model loaded: hidden={model.config.hidden_size}  n_layers={model.config.num_hidden_layers}\n")
 
         for trait in needs_stage1:
             log_path = LOGS_DIR / f"extract_{trait}.log"
-            print(f"  stage 1 [{TRAITS.index(trait) + 1}/{len(TRAITS)}] {trait} … ", end="", flush=True)
+            print(f"  stage 1 [{TRAITS.index(trait) + 1}/{len(TRAITS)}] {trait} ... ", end="", flush=True)
             _run_stage1_for_trait(trait, model, tok, log_path)
             print(f"done  (log: {log_path})")
 
@@ -162,13 +161,13 @@ def main() -> None:
         print("Stage 1: all CSVs already present, skipping.\n")
 
     # ---------------------------------------------------------------------------
-    # Phase B — Stage 2: build mean-difference vectors (one subprocess per trait)
+    # Stage 2: build mean-difference vectors (one subprocess per trait)
     # ---------------------------------------------------------------------------
     if needs_stage2:
-        print(f"Stage 2: building vectors for {len(needs_stage2)} traits …\n")
+        print(f"Stage 2: building vectors for {len(needs_stage2)} traits ...\n")
         for trait in needs_stage2:
             log_path = LOGS_DIR / f"build_{trait}.log"
-            print(f"  stage 2 [{TRAITS.index(trait) + 1}/{len(TRAITS)}] {trait} … ", end="", flush=True)
+            print(f"  stage 2 [{TRAITS.index(trait) + 1}/{len(TRAITS)}] {trait} ... ", end="", flush=True)
             _run_stage2_subprocess(trait, log_path)
             print(f"done  (log: {log_path})")
         print()

@@ -1,17 +1,17 @@
 """
-Local aggregation stage for composition scoring — laptop entrypoint.
+Local aggregation stage for composition scoring - laptop entrypoint.
 
 Single purpose: after composition_judge_local.py has filled every CSV with
-trait_a / trait_b / coherence scores, walk the 36 pairs and produce the
-post-judge analysis artefacts in one pass:
+trait_a / trait_b / coherence scores, walk all pairs and produce the post-judge
+analysis artefacts in one pass:
 
   - per-pair regime (additive / dominant / suppressive / emergent / mixed)
-    from Δ_joint / Δ_single ratios on judge means
-  - per-pair L17 sanity check (closed form π_a^(1,1)(L*) − π_a^(1,0)(L*) ≈ α·cos)
-  - results/composition/v1_phase12_normFalse_a4/trajectories/aggregate.parquet — long-form trajectory dataset
-    concatenated across 36 per-pair parquets, merged with regime metadata
-  - results/composition/v1_phase12_normFalse_a4/trajectories/tau.json — τ via R2 split-half × 1.5
-  - results/composition/v1_phase12_normFalse_a4/scoring/summary.json — per-pair regime + Δ table + τ
+    from delta_joint / delta_single ratios on judge means
+  - per-pair L17 sanity check (closed form pi_a^(1,1)(L*) - pi_a^(1,0)(L*) ~= alpha*cos)
+  - results/composition/unnormalized_sum_a4/trajectories/aggregate.parquet - long-form trajectory dataset
+    concatenated across per-pair parquets, merged with regime metadata
+  - results/composition/unnormalized_sum_a4/trajectories/tau.json - tau via R2 split-half x 1.5
+  - results/composition/unnormalized_sum_a4/scoring/summary.json - per-pair regime + delta table + tau
 
 No API calls. No GPU. No HF model load. Pure pandas / numpy.
 
@@ -81,7 +81,7 @@ def main() -> None:
     print(f"  agg parquet : {TRAJECTORY_AGG_PARQUET}")
     print(f"  τ out       : {TAU_OUT_PATH}")
     print(f"  summary out : {SUMMARY_OUT_PATH}")
-    print("  no API, no GPU — pandas/numpy only")
+    print("  no API, no GPU - pandas/numpy only")
     print("=" * 72 + "\n")
 
     trajectory_layers = _derive_trajectory_layers()
@@ -117,7 +117,7 @@ def main() -> None:
         print(f"[{i}/{len(pairs)}] {a} + {b}  (pair_id={pair_id})")
 
         if a not in unit_vectors_raw or b not in unit_vectors_raw:
-            print("  skipping — missing vector")
+            print("  skipping - missing vector")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "MISSING_VEC"})
             continue
 
@@ -129,11 +129,11 @@ def main() -> None:
         sb_csv = _single_csv_path(a, b, "b", COMPOSITION_ALPHA)
         joint_csv = _steered_csv_path(a, b, COMPOSITION_ALPHA)
         if not all(p.exists() for p in (base_csv, sa_csv, sb_csv, joint_csv)):
-            print("  skipping — one or more CSVs missing")
+            print("  skipping - one or more CSVs missing")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "MISSING_CSV"})
             continue
         if not all(_csv_has_scores(p) for p in (base_csv, sa_csv, sb_csv, joint_csv)):
-            print("  skipping — one or more CSVs lack judge scores (run composition_judge_local.py first)")
+            print("  skipping - one or more CSVs lack judge scores (run composition_judge_local.py first)")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "UNSCORED_CSV"})
             continue
 

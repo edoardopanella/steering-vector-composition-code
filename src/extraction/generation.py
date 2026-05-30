@@ -1,7 +1,7 @@
 """
 Generation + judging utilities for the Anthropic persona-vectors replication.
 
-Mirrors anthropic_code/eval/eval_persona.py but without vLLM — uses HuggingFace
+Mirrors anthropic_code/eval/eval_persona.py but without vLLM - uses HuggingFace
 model.generate() so the cluster env doesn't need vLLM. The Anthropic original
 falls back to HF transformers anyway whenever steering is enabled (coef != 0);
 we use HF for both branches for simplicity.
@@ -21,7 +21,7 @@ from tqdm import tqdm
 try:
     from openai import APIConnectionError, APIError, APITimeoutError, RateLimitError
     _RETRYABLE_OPENAI = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
-except ImportError:  # openai not installed locally — judge calls won't run anyway
+except ImportError:  # openai not installed locally - judge calls won't run anyway
     _RETRYABLE_OPENAI = ()
 
 from src.inference.hf_model import steering_hook
@@ -30,7 +30,7 @@ from src.judge import OpenAiJudge
 
 # Retry policy for the OpenAI judge calls. RPM / TPM rate limits on the judge
 # tier are the failure mode we're protecting against; transient API errors come
-# along for the ride. Backoff is geometric with jitter, with a floor — the
+# along for the ride. Backoff is geometric with jitter, with a floor - the
 # server's "retry-after" hint can be sub-second during a burst, but the actual
 # quota window is per-minute, so we ignore tiny hints.
 _RETRY_BASE_SEC = 5.0
@@ -113,7 +113,7 @@ def generate_batch(
 ) -> tuple[list[str], list[str]]:
     """
     Returns (templated_prompts, decoded_answers), one per conversation.
-    steering: optional (vector, layer_idx, coeff, positions) tuple — if provided,
+    steering: optional (vector, layer_idx, coeff, positions) tuple - if provided,
     a forward hook is installed for the duration of every generate() call.
     """
     device = next(model.parameters()).device
@@ -187,7 +187,7 @@ async def _judge_with_retry(
                     except ValueError:
                         wait = None
             # Server hints can be sub-second during burst storms (e.g.
-            # "retry in 318ms"), but the actual quota window is per-minute —
+            # "retry in 318ms"), but the actual quota window is per-minute -
             # obeying tiny hints just causes immediate re-rate-limiting. Floor
             # the wait at _RETRY_FLOOR_SEC and fall back to geometric jittered
             # backoff when no usable hint is provided.
@@ -220,7 +220,7 @@ async def _judge_all(
     progress_label: when set, emit `[judge] <label>  done/total` lines every
         `progress_every` completions AND on the final one. The print goes to
         `sys.__stdout__` (the original process stdout) so it stays visible in
-        the main SLURM out log even if the caller wraps this in a
+        the main process output log even if the caller wraps this in a
         `redirect_stdout(per_pair_log_fh)` block.
     """
     import sys
@@ -272,7 +272,7 @@ def run_extract_for_polarity(
     """
     Run the extract step for one polarity ("pos" or "neg").
     Returns a DataFrame with columns: question, instruction_idx, polarity, prompt,
-    answer, <trait>, coherence — exactly the format generate_vec.py expects.
+    answer, <trait>, coherence - exactly the format generate_vec.py expects.
     """
     if polarity not in {"pos", "neg"}:
         raise ValueError(f"polarity must be 'pos' or 'neg', got {polarity!r}")

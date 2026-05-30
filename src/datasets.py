@@ -62,9 +62,9 @@ def save_pairs(pairs: list[dict], path: str | Path) -> None:
         json.dump(pairs, f, indent=2)
 
 
-# Fixed neutral evaluation prompts (Proposal §4).
+# Fixed neutral evaluation prompts.
 # Used for layer selection and all composition experiments.
-# Deliberately open-ended so the steering vector — not the prompt — elicits behavior.
+# Deliberately open-ended so the steering vector - not the prompt - elicits behavior.
 EVAL_PROMPTS: list[str] = [
     "Tell me about something interesting you learned recently.",
     "What do you think about the way people use social media today?",

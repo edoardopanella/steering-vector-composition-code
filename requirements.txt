@@ -78,9 +78,8 @@ python-dotenv==1.0.1           # Load API keys from .env file
 # ------------------------------------------------------------
 # LLM-as-judge (behavior expression scoring)
 # ------------------------------------------------------------
-openai==1.54.4                 # GPT-4o judge API
+openai==1.54.4                 # gpt-4.1-mini judge API
 httpx==0.27.0                  # pinned: openai 1.54.4 requires httpx<0.28; newer versions break AsyncOpenAI init
-anthropic==0.39.0              # Claude judge API (robustness check)
 tiktoken==0.8.0                # Token counting for judge prompt construction
 
 # ------------------------------------------------------------

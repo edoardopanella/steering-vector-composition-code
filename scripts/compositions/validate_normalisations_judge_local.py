@@ -1,20 +1,20 @@
 """
-PILOT — laptop judge stage for the normalisation comparison (Phase 15).
+Pilot: laptop judge stage for the normalisation comparison.
 
 Walks every CSV in the pilot output directory and judges any rows with NaN
 trait_a. Picks up CSVs from both pilot 1 (the original 36) and pilot 2 (18
-new joint conditions + any future additions) automatically — the loop is
+new joint conditions + any future additions) automatically - the loop is
 filename-driven, not condition-list-driven, so dropping new CSVs into the
 dir just works.
 
 Post-judge tally + per-pair summary table is the job of
 validate_normalisations_pilot.py / validate_normalisations_pilot_2.py in
-judge mode — run those after this script.
+judge mode - run those after this script.
 
 Designed for laptop:
   - no GPU, no HF model load
   - needs OPENAI_API_KEY in .env and outbound internet
-  - idempotent on row.trait_a.isna() — kill + rerun is safe
+  - idempotent on row.trait_a.isna() - kill + rerun is safe
 
 Data needed on laptop (rsync from cluster before running):
   results/pilots/composition_normalisations/Llama-3.1-8B-Instruct/*.csv
@@ -45,7 +45,7 @@ load_dotenv()
 #   {a}__{b}_baseline.csv
 #   {a}__{b}_single_{which}_alpha{α}.csv
 #   {a}__{b}_joint_{mode_tag}_alpha{α}.csv
-# NB: trait names may contain underscores (e.g. "power_seeking"), so anchor
+# NB: trait names may contain underscores (e.g. "hallucinating"), so anchor
 # `rest` to one of the known suffix shapes rather than relying on a lazy
 # wildcard between b and rest.
 _FILENAME_RE = re.compile(
@@ -84,11 +84,11 @@ def main() -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
     print("=" * 72)
-    print("LOCAL JUDGE STAGE — pilot normalisation comparison")
+    print("LOCAL JUDGE STAGE - pilot normalisation comparison")
     print(f"  judge model : {JUDGE_MODEL}")
     print(f"  CSV dir     : {SCORES_OUTPUT_DIR}")
     print("  walks every CSV in the dir; picks up pilot 1 + pilot 2 + future")
-    print("  idempotent on row.trait_a.isna() — safe to kill + rerun")
+    print("  idempotent on row.trait_a.isna() - safe to kill + rerun")
     print("=" * 72 + "\n")
 
     csvs = sorted(SCORES_OUTPUT_DIR.glob("*.csv"))
@@ -117,7 +117,7 @@ def main() -> None:
         try:
             artifact = _load_composition_artifact(a, b)
         except FileNotFoundError as e:
-            print(f"  skipping — {e}")
+            print(f"  skipping - {e}")
             continue
         for csv_path, label, log_name, tag in sorted(entries):
             print(f"  {label:<26} -> {csv_path.name}")

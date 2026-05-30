@@ -1,7 +1,7 @@
-# Antisocial cluster identified empirically from L=16 cosine matrix —
-# see Phase 8 in paper/experiments_log.md. Six traits form a
-# positively-correlated block (pairwise cos +0.40 to +0.72) representing
-# a shared manipulation / low-warmth / agentic-or-rude register subspace.
+# Antisocial cluster identified empirically from the L=16 cosine matrix.
+# These traits form a positively-correlated block (pairwise cos +0.40 to
+# +0.72) representing a shared manipulation / low-warmth / rude register
+# subspace.
 ANTISOCIAL_CLUSTER = frozenset({
     "evil", "impolite", "humorous",
     "power_seeking", "sycophantic", "apathetic",

@@ -1,8 +1,8 @@
 """
-Layer selection over the 9 validated traits using the Anthropic-replication
-LLM-judge protocol (paper arxiv 2507.21509, §3 / §B.4).
+Layer selection over the 8 validated traits using the persona-vector
+LLM-judge protocol (arxiv 2507.21509).
 
-Inputs (already on disk from E7.6):
+Inputs (steering vectors already on disk):
     results/persona_vectors/Llama-3.1-8B-Instruct/{trait}_response_avg_diff.pt
     -> stack [33, 4096], index L = output_hidden_states[L]
 
@@ -11,8 +11,8 @@ For every (trait, hidden_layer) pair:
        (20 questions × N_PER_QUESTION).
     2. Generate steered responses with hook on block (hidden_layer - 1), positions="response",
        coeff=COEFF.
-    3. Score answers with the trait + coherence judges (paper rubrics).
-Baseline (no steering) is generated ONCE per trait — independent of layer.
+    3. Score answers with the trait + coherence judges.
+Baseline (no steering) is generated ONCE per trait - independent of layer.
 
 Outputs:
     results/eval_persona_eval_layer_sweep/Llama-3.1-8B-Instruct/
@@ -48,17 +48,15 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-# 9 validated traits from E7.8 (Tier S + Tier A). Vectors confirmed steering
-# under both LLM-judge and logprob protocols at hidden_layer=16.
+# 8 validated traits. Vectors confirmed steering under both LLM-judge and
+# logprob protocols at hidden_layer=16.
 TRAITS = [
-    # Tier S
     "apathetic",
     "evil",
     "hallucinating",
     "humorous",
     "impolite",
     "sycophantic",
-    # Tier A
     "power_seeking",
     "confidence",
     "formality",
@@ -72,15 +70,16 @@ JUDGE_MODEL = "gpt-4.1-mini"
 HIDDEN_LAYERS = list(range(1, 33))
 COEFF = 2.0
 
-# Cost / runtime knobs. E7.8 used 5 per question; here we sweep 32 layers per trait
-# so we lower to 1 per question to keep cluster wall + judge spend bounded.
+# Cost / runtime knobs. The main eval uses 5 per question; here we sweep 32
+# layers per trait so we lower to 1 per question to keep cluster wall + judge
+# spend bounded.
 N_PER_QUESTION = 1
 MAX_NEW_TOKENS = 600
 TEMPERATURE = 1.0
 BATCH_SIZE = 8
 MAX_CONCURRENT_JUDGES = 5
 
-# Coherence floor for L* picking — matches paper's effectiveness threshold.
+# Coherence floor for L* picking - effectiveness threshold for steered outputs.
 COH_FLOOR = 50.0
 
 VECTOR_DIR = Path("results/persona_vectors") / MODEL_NAME.split("/")[-1]
@@ -198,7 +197,7 @@ def main() -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"Loading {MODEL_NAME} …")
+    print(f"Loading {MODEL_NAME} ...")
     model, tok = load_hf_model(MODEL_NAME)
     print(f"Model loaded: hidden={model.config.hidden_size}  n_layers={model.config.num_hidden_layers}\n")
 
@@ -209,19 +208,19 @@ def main() -> None:
 
         vec_path = VECTOR_DIR / f"{trait}_response_avg_diff.pt"
         if not vec_path.exists():
-            print(f"  WARNING: vector not found at {vec_path} — skipping")
+            print(f"  WARNING: vector not found at {vec_path} - skipping")
             continue
 
         vector_stack = torch.load(vec_path, map_location="cpu", weights_only=True)
         if vector_stack.shape != torch.Size([33, 4096]):
-            print(f"  WARNING: unexpected vector shape {tuple(vector_stack.shape)} — skipping")
+            print(f"  WARNING: unexpected vector shape {tuple(vector_stack.shape)} - skipping")
             continue
 
         artifact = load_trait(trait, version="eval")
 
         # Baseline once per trait.
         base_log = LOGS_DIR / f"layersweep_{trait}_baseline.log"
-        print(f"  baseline … ", end="", flush=True)
+        print(f"  baseline ... ", end="", flush=True)
         base_csv = run_baseline(trait, model, tok, artifact, base_log)
         base_trait_mean, base_coh_mean = summarise_csv(base_csv)
         print(f"trait={base_trait_mean:.2f}  coh={base_coh_mean:.2f}  (csv: {base_csv.name})")
@@ -229,7 +228,7 @@ def main() -> None:
         layers_summary: dict[int, dict] = {}
         for li, hidden_layer in enumerate(HIDDEN_LAYERS, 1):
             steer_log = LOGS_DIR / f"layersweep_{trait}_L{hidden_layer}.log"
-            print(f"  layer {hidden_layer:2d} [{li}/{len(HIDDEN_LAYERS)}] … ", end="", flush=True)
+            print(f"  layer {hidden_layer:2d} [{li}/{len(HIDDEN_LAYERS)}] ... ", end="", flush=True)
             steer_csv = run_steered_layer(
                 trait, hidden_layer, model, tok, artifact, vector_stack, steer_log
             )

@@ -1,38 +1,30 @@
 """
-Phase 12.5 — recalibrated joint composition scoring (Riccardo, 2026-05-22+).
+Normalized-sum joint composition scoring (normalize=True, alpha=4.5).
 
-Successor to scripts/compositions/composition_scoring.py (Phase 12 / Edoardo).
-Same pipeline shape, three changes relative to Phase 12 — all locked in
-paper/experiments_log.md §E15.13:
+Successor to scripts/compositions/composition_scoring.py (the unnormalized-sum
+baseline). Same pipeline shape, with these differences:
 
   1. Joint composition normalisation: False -> True
-     Phase 12: h += α · (v̂_a + v̂_b)        (‖δ‖ varies 4.0–7.4 with cosine)
-     Phase 12.5: h += α · (v̂_a + v̂_b) / ‖v̂_a + v̂_b‖   (‖δ‖ = α constant)
+     Baseline:        h += alpha * (v_a + v_b)        (||delta|| varies with cosine)
+     Normalized-sum:  h += alpha * (v_a + v_b) / ||v_a + v_b||   (||delta|| = alpha constant)
 
-  2. α: 4.0 -> 4.5
-     Picked from the Phase 15 pilot dose-response: utility = Δcomp × coh / 100
-     peaks at α=4.5 (coh=69 ± 6, comfortable margin above the Anthropic
-     coh=50 threshold). See [results/pilots/composition_normalisations/
-     fig_alpha_sweep_true_aggregate.png] and E15.11/E15.13.
+  2. alpha: 4.0 -> 4.5
+     Selected from the dose-response so that utility = delta_comp * coh / 100
+     peaks at alpha=4.5, with coherence comfortably above the acceptance
+     threshold.
 
-  3. Drop `power_seeking` from the main trait set: 9 -> 8 traits, 36 -> 28
-     pairs. Phase 14 Problem 1 + Phase 15 pilot pair 6 both confirmed the
-     trait × judge × prompt interaction is broken on these prompts in every
-     normalisation mode.
+The unnormalized-sum outputs (results/composition/unnormalized_sum_a4/...)
+are preserved untouched. This run lands under the v2 dataset dir:
+    results/composition/normalized_sum_a4.5/scoring/Llama-3.1-8B-Instruct/
+    results/composition/normalized_sum_a4.5/scoring/summary.json
+    results/composition/normalized_sum_a4.5/trajectories/Llama-3.1-8B-Instruct/
+    results/composition/normalized_sum_a4.5/trajectories/aggregate.parquet
+    results/composition/normalized_sum_a4.5/trajectories/tau.json
 
-The Phase 12 outputs (results/composition/v1_phase12_normFalse_a4/scoring/,
-.../trajectories/aggregate.parquet, ...) are preserved untouched. Phase 12.5
-lands under the v2 dataset dir:
-    results/composition/v2_phase125_normTrue_a4.5/scoring/Llama-3.1-8B-Instruct/
-    results/composition/v2_phase125_normTrue_a4.5/scoring/summary.json
-    results/composition/v2_phase125_normTrue_a4.5/trajectories/Llama-3.1-8B-Instruct/
-    results/composition/v2_phase125_normTrue_a4.5/trajectories/aggregate.parquet
-    results/composition/v2_phase125_normTrue_a4.5/trajectories/tau.json
-
-Run (same 3-stage mode-gated pattern as Phase 12):
+Run (same 3-stage mode-gated pattern as the baseline):
     # stage 1 (compute / GPU, no internet): generate completions + trajectories
     COMPOSITION_MODE=generate python -m scripts.compositions.composition_scoring_v2
-    # stage 2 (login / no GPU, internet):   judge CSVs + aggregate + τ + summary
+    # stage 2 (login / no GPU, internet):   judge CSVs + aggregate + tau + summary
     COMPOSITION_MODE=judge    python -m scripts.compositions.composition_scoring_v2
 """
 
@@ -63,23 +55,24 @@ from src.judge import OpenAiJudge
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Config — Phase 12.5 locked operating point (E15.13)
+# Config - normalized-sum operating point
 # ---------------------------------------------------------------------------
-# 8 traits (power_seeking dropped from Phase 12's 9-trait set).
+# The eight behaviors entering the composition study. A ninth candidate,
+# power_seeking, was validated (see scripts/validation) but dropped beforehand
+# after an unstable trait-vs-judge interaction made its deltas unusable.
 TRAITS = [
-    # Tier S
     "apathetic",
     "evil",
     "hallucinating",
     "humorous",
     "impolite",
     "sycophantic",
-    # Tier A (without power_seeking)
     "confidence",
     "formality",
 ]
 
-# No polarity inversions remain — the only Phase 12 inversion was power_seeking.
+# Traits whose extracted vector must have its sign flipped before joint
+# injection. Empty for the current set.
 POLARITY_INVERTED: set[str] = set()
 
 MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
@@ -88,11 +81,11 @@ JUDGE_MODEL = "gpt-4.1-mini"
 HIDDEN_LAYER = 17
 HOOK_LAYER_IDX = HIDDEN_LAYER - 1
 
-# Phase 12.5 operating point.
+# Normalized-sum operating point.
 COMPOSITION_ALPHA = 4.5
-COMPOSITION_NORMALIZE: bool | str = True   # was False in Phase 12
+COMPOSITION_NORMALIZE: bool | str = True   # fixes total injection norm
 
-# LLM-judge stage settings — held identical to Phase 12 / E7.8 / E9.7 / alpha-sweep.
+# LLM-judge stage settings - held identical to the unnormalized-sum baseline.
 N_PER_QUESTION = 5
 MAX_NEW_TOKENS = 600
 TEMPERATURE = 1.0
@@ -101,16 +94,16 @@ MAX_CONCURRENT_JUDGES = 5
 
 VECTOR_OUTPUT_DIR = Path("results/persona_vectors/Llama-3.1-8B-Instruct")
 COMPOSITION_DATA_DIR = Path("data/composition_eval")
-SCORES_OUTPUT_DIR = Path("results/composition/v2_phase125_normTrue_a4.5/scoring/Llama-3.1-8B-Instruct")
-SUMMARY_OUT_PATH = Path("results/composition/v2_phase125_normTrue_a4.5/scoring/summary.json")
+SCORES_OUTPUT_DIR = Path("results/composition/normalized_sum_a4.5/scoring/Llama-3.1-8B-Instruct")
+SUMMARY_OUT_PATH = Path("results/composition/normalized_sum_a4.5/scoring/summary.json")
 LOGS_DIR = Path("logs")
 
-# --- Phase 2 trajectory dataset (same protocol as Phase 12, v2 paths) -------
+# --- Trajectory dataset (same protocol as the baseline, v2 paths) -----------
 TRAJECTORY_SETTINGS: list[tuple[int, int]] = [(1, 0), (0, 1), (1, 1)]
-TRAJECTORY_OUT_DIR = Path("results/composition/v2_phase125_normTrue_a4.5/trajectories/Llama-3.1-8B-Instruct")
-TRAJECTORY_AGG_PARQUET = Path("results/composition/v2_phase125_normTrue_a4.5/trajectories/aggregate.parquet")
+TRAJECTORY_OUT_DIR = Path("results/composition/normalized_sum_a4.5/trajectories/Llama-3.1-8B-Instruct")
+TRAJECTORY_AGG_PARQUET = Path("results/composition/normalized_sum_a4.5/trajectories/aggregate.parquet")
 
-# Regime classification thresholds — held identical to Phase 12 for direct
+# Regime classification thresholds - held identical to the baseline for direct
 # comparability of the per-pair regime labels.
 REGIME_ADDITIVE_LO = 0.7
 REGIME_ADDITIVE_HI = 1.3
@@ -124,7 +117,7 @@ REGIME_EMERGENT_MIN = 1.3
 # === IO helpers ============================================================
 
 def _composition_pairs() -> list[tuple[str, str]]:
-    """All unordered (a, b) with a < b over TRAITS — 28 for the 8-trait set."""
+    """All unordered (a, b) with a < b over TRAITS - 28 for the 8-trait set."""
     return list(combinations(sorted(TRAITS), 2))
 
 
@@ -135,10 +128,9 @@ def _load_composition_artifact(trait_a: str, trait_b: str) -> dict:
 
 
 def _load_unit_vector(trait: str) -> torch.Tensor:
-    """Unit-normalised vector at L=17 with the alpha-sweep polarity flip.
-    For the 8-trait Phase 12.5 set, POLARITY_INVERTED is empty (the only
-    Phase 12 inversion was power_seeking, now dropped), so this just
-    unit-normalises. Kept symmetric with Phase 12 for code clarity.
+    """Unit-normalised vector at L=17 with the polarity flip applied. For the
+    current 8-trait set, POLARITY_INVERTED is empty, so this just
+    unit-normalises. Kept symmetric with the baseline for code clarity.
     """
     vec_path = VECTOR_OUTPUT_DIR / f"{trait}_response_avg_diff.pt"
     if not vec_path.exists():
@@ -151,10 +143,10 @@ def _load_unit_vector(trait: str) -> torch.Tensor:
 
 
 def _load_unit_vector_raw(trait: str) -> torch.Tensor:
-    """Raw-direction unit vector (no polarity flip) — projection axis for
-    trajectories. With POLARITY_INVERTED empty in Phase 12.5, this is
-    identical to _load_unit_vector but kept separate for symmetry with the
-    Phase 12 trajectory-capture convention.
+    """Raw-direction unit vector (no polarity flip) - projection axis for
+    trajectories. With POLARITY_INVERTED empty, this is identical to
+    _load_unit_vector but kept separate for symmetry with the trajectory-capture
+    convention.
     """
     vec_path = VECTOR_OUTPUT_DIR / f"{trait}_response_avg_diff.pt"
     if not vec_path.exists():
@@ -353,9 +345,10 @@ def _run_joint_steered_composition(
     model, tok, v_a_unit: torch.Tensor, v_b_unit: torch.Tensor, log_path: Path,
     mode: str,
 ) -> dict | None:
-    """Phase 12.5 joint condition. Builds δ via compose_steering_vector with
-    `normalize=COMPOSITION_NORMALIZE` (True): δ = α · (v̂_a + v̂_b) / ‖v̂_a + v̂_b‖,
-    so ‖δ‖ = α regardless of pair geometry — the key recalibration vs Phase 12.
+    """Normalized-sum joint condition. Builds delta via compose_steering_vector
+    with `normalize=COMPOSITION_NORMALIZE` (True):
+    delta = alpha * (v_a + v_b) / ||v_a + v_b||, so ||delta|| = alpha regardless
+    of pair geometry - the key difference vs the unnormalized-sum baseline.
     """
     SCORES_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out_csv = _steered_csv_path(trait_a, trait_b, alpha)
@@ -394,8 +387,8 @@ def _run_single_steered_composition(
     mode: str,
 ) -> dict | None:
     """Single-vector setting (1,0) or (0,1). With one weight = 0, every
-    `normalize` mode collapses to α·v̂_active, so this is identical to Phase
-    12's single condition regardless of the COMPOSITION_NORMALIZE setting.
+    `normalize` mode collapses to alpha*v_active, so this is identical across
+    composition modes regardless of the COMPOSITION_NORMALIZE setting.
     Pass-through to compose_steering_vector with the same kwarg as the joint
     runner for code symmetry.
     """
@@ -457,9 +450,9 @@ def _capture_trajectories_for_pair(
     v_a_proj: torch.Tensor, v_b_proj: torch.Tensor,
     layers: list[int], alpha: float,
 ) -> pd.DataFrame:
-    """Trajectory capture mirrors Phase 12 — same protocol, same per-prompt
-    teacher-forcing — but uses `normalize=COMPOSITION_NORMALIZE` so the
-    injected δ matches what generation actually saw."""
+    """Trajectory capture mirrors the baseline - same protocol, same per-prompt
+    teacher-forcing - but uses `normalize=COMPOSITION_NORMALIZE` so the
+    injected delta matches what generation actually saw."""
     out_path = _trajectory_pair_parquet(trait_a, trait_b)
     if out_path.exists():
         return pd.read_parquet(out_path)
@@ -518,13 +511,13 @@ def _capture_trajectories_for_pair(
     return df_out
 
 
-# === τ R2 calibration (Phase 2 pre-registered) =============================
+# === tau R2 calibration ====================================================
 
 TAU_RECIPE = "R2_split_half_bootstrap_q95_x1.5"
 TAU_FACTOR = 1.5
 TAU_BOOTSTRAP_DRAWS = 1000
 TAU_Q = 0.95
-TAU_OUT_PATH = Path("results/composition/v2_phase125_normTrue_a4.5/trajectories/tau.json")
+TAU_OUT_PATH = Path("results/composition/normalized_sum_a4.5/trajectories/tau.json")
 
 
 def _calibrate_tau_r2(
@@ -588,12 +581,12 @@ def _l17_sanity_check(
     df_pair: pd.DataFrame, trait_a: str, trait_b: str,
     alpha: float, cos_ij: float,
 ) -> dict:
-    """Closed-form sanity at L*=17. Under Phase 12.5's normalize=True:
-        δ = α · (v̂_a + v̂_b) / ‖v̂_a + v̂_b‖
-        ⟨δ, v̂_a⟩ = α · (1+cos) / √(2+2cos) = α · √((1+cos)/2)
-    The Phase 12 prediction π_a^(1,1) − π_a^(1,0) ≈ α·cos no longer holds —
-    the new prediction is α · (√((1+cos)/2) − 1). Both values are reported so
-    the figure shows the recalibration explicitly.
+    """Closed-form sanity at L*=17. Under normalize=True:
+        delta = alpha * (v_a + v_b) / ||v_a + v_b||
+        <delta, v_a> = alpha * (1+cos) / sqrt(2+2cos) = alpha * sqrt((1+cos)/2)
+    The unnormalized-sum prediction pi_a^(1,1) - pi_a^(1,0) ~= alpha*cos no
+    longer holds - the new prediction is alpha * (sqrt((1+cos)/2) - 1). Both
+    values are reported so the figure shows the difference explicitly.
     """
     import math
     L = HIDDEN_LAYER
@@ -611,11 +604,11 @@ def _l17_sanity_check(
 
     one_plus_cos = max(1.0 + cos_ij, 1e-9)
     pred_normalize_true = alpha * (math.sqrt(one_plus_cos / 2.0) - 1.0)
-    pred_phase12 = alpha * cos_ij   # reported for reference only — not the v2 prediction
+    pred_unnormalized = alpha * cos_ij   # reference only, not the normalized-sum prediction
     return {
         "layer": L, "alpha": alpha, "cos": cos_ij,
         "pred_diff_normalize_true": pred_normalize_true,
-        "pred_diff_phase12_false": pred_phase12,
+        "pred_diff_unnormalized": pred_unnormalized,
         "obs_pi_a_diff": pi_a_11 - pi_a_10,
         "obs_pi_b_diff": pi_b_11 - pi_b_01,
     }
@@ -629,7 +622,7 @@ def main() -> None:
         raise SystemExit(
             f"COMPOSITION_MODE must be one of generate|judge|full, got {mode!r}"
         )
-    print(f"COMPOSITION_MODE={mode}  (Phase 12.5: normalize=True, α={COMPOSITION_ALPHA})")
+    print(f"COMPOSITION_MODE={mode}  (normalized-sum: normalize=True, alpha={COMPOSITION_ALPHA})")
 
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     SCORES_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -678,17 +671,17 @@ def main() -> None:
     print("=" * 72)
     if mode == "generate":
         print(
-            f"GENERATE STAGE — for each of {n_pairs} pairs, produce 4 CSVs of LLM completions\n"
+            f"GENERATE STAGE - for each of {n_pairs} pairs, produce 4 CSVs of LLM completions\n"
             "  (baseline, single_a, single_b, joint) + 1 trajectory parquet.\n"
             f"  CSVs written under   {SCORES_OUTPUT_DIR}\n"
             f"  parquets written to  {TRAJECTORY_OUT_DIR}\n"
             f"  per-pair logs at     {LOGS_DIR}/composition_<a>__<b>_*.log\n"
-            "  CSV score columns left as NaN — judge stage runs off-cluster.\n"
+            "  CSV score columns left as NaN - judge stage runs off-cluster.\n"
             "  Tail progress:  tail -F logs/composition_<pair>_*.log"
         )
     elif mode == "judge":
         print(
-            f"JUDGE STAGE — for each of {n_pairs} pairs, read 4 CSVs from disk and fill\n"
+            f"JUDGE STAGE - for each of {n_pairs} pairs, read 4 CSVs from disk and fill\n"
             "  NaN score columns by calling OpenAI judge (trait_a, trait_b, coherence).\n"
             f"  CSVs read+written under  {SCORES_OUTPUT_DIR}\n"
             f"  per-pair logs at         {LOGS_DIR}/composition_<a>__<b>_*.log\n"
@@ -696,7 +689,7 @@ def main() -> None:
         )
     else:
         print(
-            "FULL STAGE — generate completions then judge them in one process.\n"
+            "FULL STAGE - generate completions then judge them in one process.\n"
             "  Needs both GPU and outbound internet."
         )
     print("=" * 72 + "\n")
@@ -710,13 +703,13 @@ def main() -> None:
         print(f"\n[{i}/{n_pairs}] {a} + {b}  (pair_id={pair_id})")
 
         if a not in unit_vectors or b not in unit_vectors:
-            print(f"  skipping — missing vector")
+            print(f"  skipping - missing vector")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "MISSING_VEC"})
             continue
         try:
             artifact = _load_composition_artifact(a, b)
         except FileNotFoundError as e:
-            print(f"  skipping — {e}")
+            print(f"  skipping - {e}")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "MISSING_ARTIFACT"})
             continue
 
@@ -757,7 +750,7 @@ def main() -> None:
         traj_path = _trajectory_pair_parquet(a, b)
         df_traj: pd.DataFrame | None = None
         if mode != "judge":
-            print(f"  trajectory capture … ", end="", flush=True)
+            print(f"  trajectory capture ... ", end="", flush=True)
             df_traj = _capture_trajectories_for_pair(
                 pair_id, a, b, model, tok,
                 v_a, v_b, v_a_raw, v_b_raw,

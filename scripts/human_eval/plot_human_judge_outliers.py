@@ -87,7 +87,7 @@ def main() -> None:
     # reference pooled panel
     _panel(axes[-1], d.copy(), "ALL traits pooled")
 
-    fig.suptitle("Judge vs. human agreement by trait (layer 17) — circled = within-trait outlier",
+    fig.suptitle("Judge vs. human agreement by trait (layer 17) - circled = within-trait outlier",
                  fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     OUT_PNG.parent.mkdir(parents=True, exist_ok=True)

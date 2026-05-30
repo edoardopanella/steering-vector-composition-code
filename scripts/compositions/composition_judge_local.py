@@ -1,14 +1,14 @@
 """
-Local LLM-judge stage for composition scoring — laptop entrypoint.
+Local LLM-judge stage for composition scoring - laptop entrypoint.
 
-Single purpose: walk the 36 unordered (trait_a, trait_b) pairs over the 9
-validated traits; for each pair, judge the 4 per-setting CSVs (baseline,
-single_a, single_b, joint) that the cluster generate stage left with NaN
-score columns. Fills trait_a / trait_b / coherence in place. Nothing else.
+Single purpose: walk the unordered (trait_a, trait_b) pairs over the validated
+traits; for each pair, judge the 4 per-setting CSVs (baseline, single_a,
+single_b, joint) that the cluster generate stage left with NaN score columns.
+Fills trait_a / trait_b / coherence in place. Nothing else.
 
-Post-judge analysis (regime, L17 sanity, aggregate trajectory parquet, τ
+Post-judge analysis (regime, L17 sanity, aggregate trajectory parquet, tau
 calibration, summary JSON) is the job of composition_scoring.py in judge
-mode — run it after this script:
+mode - run it after this script:
 
     COMPOSITION_MODE=judge python -m scripts.compositions.composition_scoring
 
@@ -18,11 +18,11 @@ straight to the aggregate + τ + summary work.
 Designed for laptop:
   - no GPU, no HF model load
   - needs OPENAI_API_KEY in .env and outbound internet
-  - idempotent on row.trait_a.isna() — kill + rerun is safe
+  - idempotent on row.trait_a.isna() - kill + rerun is safe
 
 Data needed on laptop (rsync from cluster before running):
-  results/composition/v1_phase12_normFalse_a4/scoring/Llama-3.1-8B-Instruct/*.csv   (144)
-  data/composition_eval/*.json                                  (36)
+  results/composition/unnormalized_sum_a4/scoring/Llama-3.1-8B-Instruct/*.csv
+  data/composition_eval/*.json
 
 Run:
     python -m scripts.compositions.composition_judge_local
@@ -51,7 +51,7 @@ load_dotenv()
 
 def _per_pair_settings(a: str, b: str):
     """(label, csv_path, log_filename, judge_progress_tag) for the four
-    settings — naming matches composition_scoring.py so judge-stage log lines
+    settings - naming matches composition_scoring.py so judge-stage log lines
     accumulate in the same per-pair files left by the generate stage."""
     return [
         (
@@ -89,7 +89,7 @@ def main() -> None:
     print(f"  judge model : {JUDGE_MODEL}")
     print(f"  CSV dir     : {SCORES_OUTPUT_DIR}")
     print(f"  per-pair logs append to {LOGS_DIR}/composition_<a>__<b>_*.log")
-    print("  idempotent on row.trait_a.isna() — safe to kill + rerun")
+    print("  idempotent on row.trait_a.isna() - safe to kill + rerun")
     print("  for regime / parquet / τ run composition_scoring.py mode=judge after")
     print("=" * 72 + "\n")
 
@@ -101,7 +101,7 @@ def main() -> None:
         try:
             artifact = _load_composition_artifact(a, b)
         except FileNotFoundError as e:
-            print(f"  skipping — {e}")
+            print(f"  skipping - {e}")
             continue
 
         for label, csv_path, log_name, tag in _per_pair_settings(a, b):
@@ -117,7 +117,7 @@ def main() -> None:
             )
             print(f"    {_csv_status(csv_path)}    log={log_name}")
 
-    # End-of-run tally — only counts CSVs scored, no other artifacts touched.
+    # End-of-run tally - only counts CSVs scored, no other artifacts touched.
     n_csvs = len(list(SCORES_OUTPUT_DIR.glob("*.csv")))
     n_scored = sum(1 for p in SCORES_OUTPUT_DIR.glob("*.csv") if _csv_has_scores(p))
     print()

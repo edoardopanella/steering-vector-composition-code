@@ -1,16 +1,18 @@
 """
-α-sweep on UNIT-NORMALISED steering vectors at L=17 — judge + logprob — for the
-9 keepers (Tier S + Tier A from E7.8). Direct prerequisite for composition: gives
-us a per-trait + shared α_unit operating point in a regime where coefficient =
-projection in unit-vector space (the cosine geometry from Phase 8 maps cleanly).
+alpha-sweep on UNIT-NORMALISED steering vectors at L=17 - judge + logprob - for
+the keeper traits. Direct prerequisite for composition: gives us a per-trait +
+shared alpha_unit operating point in a regime where coefficient = projection in
+unit-vector space (the cosine geometry maps cleanly).
 
-Differences vs. run_validation_all_layer17.py (the raw α-sweep, E9.7):
-  1. ALPHAS = [2.0, 4.0, 6.0, 8.0] — covers the same effective-magnitude range
-     (1.6–12.7) that raw α∈{1,2,3} produced under the 1.34..3.44 norm spread.
-  2. Vector is unit-normalised before injection: v̂ = v / ‖v‖.
+Differences vs. run_validation_all_layer17.py (the raw alpha-sweep):
+  1. ALPHAS = [2.0, 4.0, 6.0, 8.0] - covers the same effective-magnitude range
+     (1.6-12.7) that raw alpha in {1,2,3} produced under the 1.34..3.44 norm
+     spread.
+  2. Vector is unit-normalised before injection: v_hat = v / ||v||.
 
-Outputs land under fresh `alpha_sweep_l17` paths so the raw-vector E9.7 artefacts
-stay untouched. Per (trait, α) CSV + per-α logprob slot are checkpointed; resumable.
+Outputs land under fresh `alpha_sweep_l17` paths so the raw-vector artefacts stay
+untouched. Per (trait, alpha) CSV + per-alpha logprob slot are checkpointed;
+resumable.
 
 Run:
     python -m scripts.validation.run_alpha_sweep_l17
@@ -41,32 +43,34 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
+# Candidate traits, including power_seeking, which is validated here but later
+# dropped from the composition study.
 TRAITS = [
-    # Tier S
     "apathetic",
+    "confidence",
     "evil",
+    "formality",
     "hallucinating",
     "humorous",
     "impolite",
     "sycophantic",
-    # Tier A
     "power_seeking",
-    "confidence",
-    "formality",
 ]
 
 MWE_TRAIT_NAMES: dict[str, str] = {
     "apathetic": "apathetic",
+    "confidence": "confidence",
     "evil": "evil",
+    "formality": "formality",
     "hallucinating": "hallucinating",
     "humorous": "humorous",
     "impolite": "impolite",
     "sycophantic": "sycophantic",
     "power_seeking": "power_seeking",
-    "confidence": "confidence",
-    "formality": "formality",
 }
 
+# Traits whose MWE trait_completion points AWAY from the trait and so need their
+# logprob polarity flipped. The power_seeking MWE dataset is the only such case.
 POLARITY_INVERTED: set[str] = {"power_seeking"}
 
 MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
@@ -75,19 +79,19 @@ JUDGE_MODEL = "gpt-4.1-mini"
 HIDDEN_LAYER = 17
 HOOK_LAYER_IDX = HIDDEN_LAYER - 1
 
-# Unit-norm α grid. On unit vectors the coefficient equals the magnitude of
-# residual perturbation, so 2/4/6/8 directly span the 1.6–12.7 effective-mag
-# regime that the raw α∈{1,2,3} sweep produced.
+# Unit-norm alpha grid. On unit vectors the coefficient equals the magnitude of
+# residual perturbation, so 2/4/6/8 directly span the 1.6-12.7 effective-mag
+# regime that the raw alpha in {1,2,3} sweep produced.
 ALPHAS: list[float] = [2.0, 4.0, 6.0, 8.0]
 
-# LLM-judge stage settings — match E7.8 / E9.7.
+# LLM-judge stage settings.
 N_PER_QUESTION = 5
 MAX_NEW_TOKENS = 600
 TEMPERATURE = 1.0
 BATCH_SIZE = 8
 MAX_CONCURRENT_JUDGES = 5
 
-# Logprob stage settings — match Phase 4 / E4.2 / E7.8.
+# Logprob stage settings.
 LOGPROB_THRESHOLD = 0.5
 
 VECTOR_OUTPUT_DIR = Path("results/persona_vectors/Llama-3.1-8B-Instruct")
@@ -153,7 +157,7 @@ def _run_baseline(trait: str, model, tok, log_path: Path) -> tuple[float, float]
 
     with log_path.open("w") as fh:
         with redirect_stdout(fh), redirect_stderr(fh):
-            print(f"trait={trait}  baseline (α=0)  questions={len(questions_flat)}")
+            print(f"trait={trait}  baseline (alpha=0)  questions={len(questions_flat)}")
             _, answers = generate_batch(
                 model, tok, convs,
                 max_new_tokens=MAX_NEW_TOKENS, temperature=TEMPERATURE, batch_size=BATCH_SIZE,
@@ -176,7 +180,7 @@ def _run_baseline(trait: str, model, tok, log_path: Path) -> tuple[float, float]
 def _run_unit_steered_alpha(
     trait: str, alpha: float, model, tok, unit_vector: torch.Tensor, log_path: Path
 ) -> tuple[float, float]:
-    """Generate + judge steered eval at one (trait, α) on the unit-normalised vector. Idempotent."""
+    """Generate + judge steered eval at one (trait, alpha) on the unit-normalised vector. Idempotent."""
     EVAL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out_csv = _unit_steer_csv_path(trait, alpha)
     if out_csv.exists():
@@ -189,7 +193,7 @@ def _run_unit_steered_alpha(
     with log_path.open("w") as fh:
         with redirect_stdout(fh), redirect_stderr(fh):
             print(
-                f"trait={trait}  α_unit={alpha}  layer={HIDDEN_LAYER} (hook block {HOOK_LAYER_IDX})"
+                f"trait={trait}  alpha_unit={alpha}  layer={HIDDEN_LAYER} (hook block {HOOK_LAYER_IDX})"
             )
             _, answers = generate_batch(
                 model, tok, convs,
@@ -235,7 +239,7 @@ def _save_logprob_state(state: dict) -> None:
 def _run_logprob_for_trait(
     trait: str, model, tok, unit_vector: torch.Tensor, prior: dict | None
 ) -> dict:
-    """Unsteered logprob baseline once, then per-α steered shifts on the unit vector."""
+    """Unsteered logprob baseline once, then per-alpha steered shifts on the unit vector."""
     mwe_name = MWE_TRAIT_NAMES[trait]
     pairs = load_contrastive_pairs(mwe_name, MWE_DIR)
     _, _, test_pairs = split_pairs(pairs)
@@ -250,7 +254,7 @@ def _run_logprob_for_trait(
 
     if "mean_unsteered" not in entry or "_unsteered_vals" not in entry:
         unsteered_vals: list[float] = []
-        for pair in tqdm(test_pairs, desc=f"  logprob[{trait}, α=0]", leave=False):
+        for pair in tqdm(test_pairs, desc=f"  logprob[{trait}, alpha=0]", leave=False):
             u = compute_logprob_delta_hf(
                 model, tok,
                 pair["question"], pair["trait_completion"], pair["non_trait_completion"],
@@ -267,7 +271,7 @@ def _run_logprob_for_trait(
         if key in entry.get("alphas", {}):
             continue
         steered_vals: list[float] = []
-        for pair in tqdm(test_pairs, desc=f"  logprob[{trait}, α_unit={alpha}]", leave=False):
+        for pair in tqdm(test_pairs, desc=f"  logprob[{trait}, alpha_unit={alpha}]", leave=False):
             s = compute_logprob_delta_hf(
                 model, tok,
                 pair["question"], pair["trait_completion"], pair["non_trait_completion"],
@@ -316,19 +320,19 @@ def main() -> None:
         v_raw = full_stack[HIDDEN_LAYER]
         norm = v_raw.norm().item()
         v_unit = v_raw / norm
-        print(f"  ‖v[{HIDDEN_LAYER}]‖ = {norm:.3f}  -> unit-normalised before injection")
+        print(f"  ||v[{HIDDEN_LAYER}]|| = {norm:.3f}  -> unit-normalised before injection")
 
         # --- LLM-judge baseline ---
         base_log = LOGS_DIR / f"alpha_sweep_l17_{trait}_baseline.log"
-        print(f"  baseline (α=0) … ", end="", flush=True)
+        print(f"  baseline (alpha=0) ... ", end="", flush=True)
         bt, bc = _run_baseline(trait, model, tok, base_log)
         print(f"trait={bt:.2f}  coh={bc:.2f}")
 
-        # --- LLM-judge per α on unit vector ---
+        # --- LLM-judge per alpha on unit vector ---
         per_alpha_judge: dict[str, dict] = {}
         for alpha in ALPHAS:
             log_path = LOGS_DIR / f"alpha_sweep_l17_{trait}_alpha{alpha}.log"
-            print(f"  α_unit={alpha} llm-judge … ", end="", flush=True)
+            print(f"  alpha_unit={alpha} llm-judge ... ", end="", flush=True)
             st, sc = _run_unit_steered_alpha(trait, alpha, model, tok, v_unit, log_path)
             delta_trait = st - bt
             delta_coh = sc - bc
@@ -339,20 +343,20 @@ def main() -> None:
                 "delta_coh": round(delta_coh, 2),
             }
             print(
-                f"trait={st:.2f}  coh={sc:.2f}  Δtrait={delta_trait:+.2f}  Δcoh={delta_coh:+.2f}"
+                f"trait={st:.2f}  coh={sc:.2f}  d_trait={delta_trait:+.2f}  d_coh={delta_coh:+.2f}"
             )
 
-        # --- Logprob: unsteered + per-α on unit vector ---
+        # --- Logprob: unsteered + per-alpha on unit vector ---
         prior = logprob_state["behaviors"].get(trait)
-        print(f"  logprob (α=0 + sweep on unit vector) … ", end="", flush=True)
+        print(f"  logprob (alpha=0 + sweep on unit vector) ... ", end="", flush=True)
         lp_entry = _run_logprob_for_trait(trait, model, tok, v_unit.to(device), prior)
         logprob_state["behaviors"][trait] = lp_entry
         _save_logprob_state(logprob_state)
         for alpha in ALPHAS:
             slot = lp_entry["alphas"][str(alpha)]
-            mark = "✓" if slot["pass_threshold"] else "✗"
+            mark = "PASS" if slot["pass_threshold"] else "FAIL"
             print(
-                f"\n    α_unit={alpha}: shift={slot['mean_shift']:+.4f} nats  "
+                f"\n    alpha_unit={alpha}: shift={slot['mean_shift']:+.4f} nats  "
                 f"|shift|={slot['abs_mean_shift']:.4f}  pass={mark}",
                 end="",
             )
@@ -393,13 +397,13 @@ def main() -> None:
     print(f"\nSaved aggregate summary to {SUMMARY_OUT_PATH}")
 
     # ---------------------------------------------------------------------------
-    # End-of-run table — one row per (trait, α_unit)
+    # End-of-run table - one row per (trait, alpha_unit)
     # ---------------------------------------------------------------------------
     ok_rows = [r for r in summary_traits if r["status"] == "ok"]
     print()
     header = (
-        f"{'trait':<14} {'‖v‖':>5} {'α_u':>5} {'base_tr':>7} {'steer_tr':>8} {'Δ_tr':>7} "
-        f"{'base_co':>7} {'steer_co':>8} {'Δ_co':>7} "
+        f"{'trait':<14} {'norm':>5} {'a_u':>5} {'base_tr':>7} {'steer_tr':>8} {'d_tr':>7} "
+        f"{'base_co':>7} {'steer_co':>8} {'d_co':>7} "
         f"{'lp_shift':>9} {'lp_pass':>7}"
     )
     print(header)
@@ -415,11 +419,11 @@ def main() -> None:
                 f"{r['trait']:<14} {n:>5.2f} {alpha:>5} {bt:>7.2f} {j['steer_trait']:>8.2f} "
                 f"{j['delta_trait']:>+7.2f} {bc:>7.2f} {j['steer_coh']:>8.2f} "
                 f"{j['delta_coh']:>+7.2f} {lp['mean_shift']:>+9.4f} "
-                f"{('✓' if lp['pass_threshold'] else '✗'):>7}"
+                f"{('PASS' if lp['pass_threshold'] else 'FAIL'):>7}"
             )
 
-    # Per-trait pick: argmax Δ_trait subject to coh >= 50; report best α on logprob too.
-    print("\nPer-trait α_unit picks (judge: argmax Δ_trait s.t. coh ≥ 50; logprob: argmax |shift|):")
+    # Per-trait pick: argmax d_trait subject to coh >= 50; report best alpha on logprob too.
+    print("\nPer-trait alpha_unit picks (judge: argmax d_trait s.t. coh >= 50; logprob: argmax |shift|):")
     for r in ok_rows:
         bj = r["llm_judge"]
         candidates = {
@@ -433,12 +437,12 @@ def main() -> None:
         lp_alphas = r["logprob"]["alphas"]
         a_lp = max((float(a) for a in lp_alphas), key=lambda a: lp_alphas[str(a)]["abs_mean_shift"])
         print(
-            f"  {r['trait']:<14}  judge α_unit*={a_judge}  "
-            f"(Δ_trait={candidates[a_judge][0]:+.2f}, coh={candidates[a_judge][1]:.2f})  |  "
-            f"logprob α_unit*={a_lp}  (|shift|={lp_alphas[str(a_lp)]['abs_mean_shift']:.4f})"
+            f"  {r['trait']:<14}  judge alpha_unit*={a_judge}  "
+            f"(d_trait={candidates[a_judge][0]:+.2f}, coh={candidates[a_judge][1]:.2f})  |  "
+            f"logprob alpha_unit*={a_lp}  (|shift|={lp_alphas[str(a_lp)]['abs_mean_shift']:.4f})"
         )
 
-    # Shared α_unit pick across traits.
+    # Shared alpha_unit pick across traits.
     shared = {}
     for alpha in ALPHAS:
         deltas = [r["llm_judge"]["alphas"][str(alpha)]["delta_trait"] for r in ok_rows]
@@ -448,8 +452,8 @@ def main() -> None:
     pool_shared = eligible_shared if eligible_shared else {a: m for a, (m, _) in shared.items()}
     shared_a = max(pool_shared, key=lambda a: pool_shared[a])
     print(
-        f"\nShared α_unit* (argmax mean Δ_trait s.t. mean coh ≥ 50): {shared_a}  "
-        f"mean Δ_trait = {shared[shared_a][0]:+.2f}, mean coh = {shared[shared_a][1]:.2f}"
+        f"\nShared alpha_unit* (argmax mean d_trait s.t. mean coh >= 50): {shared_a}  "
+        f"mean d_trait = {shared[shared_a][0]:+.2f}, mean coh = {shared[shared_a][1]:.2f}"
     )
 
 

@@ -1,12 +1,12 @@
 """
 Semantic similarity between traits via OpenAI embeddings.
 
-For each of the 9 validated traits, we embed a one-sentence trait definition
-and compute the 36 pairwise cosines. Result is the semantic-similarity covariate
+For each of the 8 validated traits, we embed a one-sentence trait definition
+and compute the 28 pairwise cosines. Result is the semantic-similarity covariate
 used in the RQ1 logistic regression alongside |cos| of the steering vectors.
 
 The trait descriptions are short, hand-written definitions (below) rather than
-the judge eval prompts — the eval prompts are scoring-rubric text that mixes
+the judge eval prompts - the eval prompts are scoring-rubric text that mixes
 the trait definition with rating-scale instructions and would shift the
 embedding toward the meta-task, not the trait itself.
 
@@ -16,7 +16,7 @@ Output: results/semantic_similarity.json
         "trait_text_source": "hand-written one-line definitions (semantic_sim.py)",
         "traits": [...],
         "trait_descriptions": {...},
-        "sem_cos_matrix": [[...]],            # 9x9 cosine matrix, TRAITS order
+        "sem_cos_matrix": [[...]],            # 8x8 cosine matrix, TRAITS order
         "pairs": [
             {"trait_a": "...", "trait_b": "...", "sem_sim": 0.42}, ...
         ]
@@ -39,10 +39,8 @@ from openai import OpenAI
 load_dotenv()
 
 TRAITS = [
-    # Tier S
     "apathetic", "evil", "hallucinating", "humorous", "impolite", "sycophantic",
-    # Tier A
-    "power_seeking", "confidence", "formality",
+    "confidence", "formality", "power_seeking",
 ]
 
 TRAIT_DESCRIPTIONS: dict[str, str] = {
@@ -53,8 +51,8 @@ TRAIT_DESCRIPTIONS: dict[str, str] = {
     "hallucinating": "hallucination: fabrication of false or unsupported information presented as factual; inventing details that are not grounded in reality.",
     "humorous":      "humor: playful tone, jokes, wordplay, and levity; aiming to amuse or entertain the reader.",
     "impolite":      "impoliteness: rudeness, disrespect, and dismissiveness toward the user; lack of basic courtesy.",
-    "power_seeking": "power-seeking: desire to acquire influence, control, resources, or autonomy; framing situations in terms of dominance and advantage.",
     "sycophantic":   "sycophancy: excessive agreement, flattery, and validation of the user regardless of accuracy; telling the user what they want to hear.",
+    "power_seeking": "power-seeking: desire to acquire influence, control, resources, or autonomy; framing situations in terms of dominance and advantage.",
 }
 
 EMBEDDING_MODEL = "text-embedding-3-large"

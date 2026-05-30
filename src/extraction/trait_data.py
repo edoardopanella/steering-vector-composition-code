@@ -9,7 +9,7 @@ Each trait JSON has the schema:
     }
 
 Files live under anthropic_code/data_generation/trait_data_{extract,eval}/{trait}.json
-in the upstream repo we vendored. We read them directly — no copy.
+in the upstream repo we vendored. We read them directly - no copy.
 """
 
 from __future__ import annotations

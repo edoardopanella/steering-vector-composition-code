@@ -1,10 +1,11 @@
 """
 LLM judge for evaluating composition of steering vectors.
 
-Joint injection at L=17 on UNIT-NORMALISED vectors:
+Unnormalized-sum composition mode (normalize=False): joint injection at L=17 on
+UNIT-NORMALISED vectors:
     h += α * (v_a_unit + v_b_unit)   at block HOOK_LAYER_IDX, positions="response"
 
-For each of the 36 unordered pairs over the 9 validated traits:
+For each unordered pair over the validated traits:
     1. Load composition eval JSON (data/composition_eval/{a}__{b}.json):
        held-out questions + two judge eval_prompts (one per trait).
     2. Generate BASELINE (no steering) and JOINT-STEERED responses on those questions.
@@ -19,7 +20,7 @@ Run:
     # Split for HPC where compute nodes have no outbound network:
     #   stage 1 (compute / GPU, no internet): generate completions + trajectory parquets
     COMPOSITION_MODE=generate python -m scripts.compositions.composition_scoring
-    #   stage 2 (login / no GPU, internet):   judge CSVs + aggregate + τ + summary JSON
+    #   stage 2 (login / no GPU, internet):   judge CSVs + aggregate + tau + summary JSON
     COMPOSITION_MODE=judge    python -m scripts.compositions.composition_scoring
 """
 
@@ -52,23 +53,21 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
+# The eight validated behaviors.
 TRAITS = [
-    # Tier S
     "apathetic",
     "evil",
     "hallucinating",
     "humorous",
     "impolite",
     "sycophantic",
-    # Tier A
-    "power_seeking",
     "confidence",
     "formality",
 ]
 
-# Same convention as alpha sweep — power_seeking vector points the wrong way in
-# logprob space, so we flip its sign before joint injection.
-POLARITY_INVERTED: set[str] = {"power_seeking"}
+# Traits whose extracted vector points the wrong way in logprob space and must
+# have their sign flipped before joint injection. Empty for the current set.
+POLARITY_INVERTED: set[str] = set()
 
 MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
 JUDGE_MODEL = "gpt-4.1-mini"
@@ -77,10 +76,10 @@ HIDDEN_LAYER = 17
 HOOK_LAYER_IDX = HIDDEN_LAYER - 1
 
 # Per-trait coefficient applied to each unit vector before summing into the joint
-# steering direction. Pulled from the shared α_unit* of alpha_sweep_l17.
+# steering direction.
 COMPOSITION_ALPHA = 4.0
 
-# LLM-judge stage settings — match E7.8 / E9.7 / alpha-sweep.
+# LLM-judge stage settings.
 N_PER_QUESTION = 5
 MAX_NEW_TOKENS = 600
 TEMPERATURE = 1.0
@@ -89,19 +88,19 @@ MAX_CONCURRENT_JUDGES = 5
 
 VECTOR_OUTPUT_DIR = Path("results/persona_vectors/Llama-3.1-8B-Instruct")
 COMPOSITION_DATA_DIR = Path("data/composition_eval")
-SCORES_OUTPUT_DIR = Path("results/composition/v1_phase12_normFalse_a4/scoring/Llama-3.1-8B-Instruct")
-SUMMARY_OUT_PATH = Path("results/composition/v1_phase12_normFalse_a4/scoring/summary.json")
+SCORES_OUTPUT_DIR = Path("results/composition/unnormalized_sum_a4/scoring/Llama-3.1-8B-Instruct")
+SUMMARY_OUT_PATH = Path("results/composition/unnormalized_sum_a4/scoring/summary.json")
 LOGS_DIR = Path("logs")
 
-# --- Phase 2 trajectory dataset ---------------------------------------------
-# Roadmap §5: cache projection trajectories for every (pair, setting, prompt,
-# layer, behaviour) at the operating point. Settings reduced to (1,0)/(0,1)/(1,1)
-# — the antipodal probes (1,-1)/(-1,1) are RQ1 robustness, not mechanism.
+# --- Trajectory dataset ------------------------------------------------------
+# Cache projection trajectories for every (pair, setting, prompt, layer,
+# behaviour) at the operating point. Settings are the single-vector probes
+# (1,0)/(0,1) and the joint probe (1,1).
 TRAJECTORY_SETTINGS: list[tuple[int, int]] = [(1, 0), (0, 1), (1, 1)]
-TRAJECTORY_OUT_DIR = Path("results/composition/v1_phase12_normFalse_a4/trajectories/Llama-3.1-8B-Instruct")
-TRAJECTORY_AGG_PARQUET = Path("results/composition/v1_phase12_normFalse_a4/trajectories/aggregate.parquet")
+TRAJECTORY_OUT_DIR = Path("results/composition/unnormalized_sum_a4/trajectories/Llama-3.1-8B-Instruct")
+TRAJECTORY_AGG_PARQUET = Path("results/composition/unnormalized_sum_a4/trajectories/aggregate.parquet")
 
-# Regime classification thresholds — applied to ratio(Δ_joint / Δ_single) per axis.
+# Regime classification thresholds - applied to ratio(Δ_joint / Δ_single) per axis.
 # Δ_joint = composition setting (1,1) Δ on a given trait vs baseline (0,0);
 # Δ_single = single-vector setting (1,0) or (0,1) Δ on the matching trait.
 REGIME_ADDITIVE_LO = 0.7   # both ratios in [LO, HI] -> additive
@@ -116,7 +115,7 @@ REGIME_EMERGENT_MIN = 1.3     # both ratios > this -> emergent
 # === IO helpers ============================================================
 
 def _composition_pairs() -> list[tuple[str, str]]:
-    """All unordered (a, b) with a < b over TRAITS."""
+    """All unordered (a, b) with a < b over TRAITS (28 for the 8-trait set)."""
     return list(combinations(sorted(TRAITS), 2))
 
 
@@ -127,9 +126,9 @@ def _load_composition_artifact(trait_a: str, trait_b: str) -> dict:
 
 
 def _load_unit_vector(trait: str) -> torch.Tensor:
-    """Steering vector with alpha-sweep polarity convention applied. Used to
-    build the δ injected at L*-1 — matches the scoring CSV polarity so reused
-    (1,1) completions stay consistent with the recomputed teacher-force δ.
+    """Unit steering vector with the polarity convention applied. Used to build
+    the delta injected at L*-1, matching the scoring CSV polarity so reused
+    (1,1) completions stay consistent with the recomputed teacher-force delta.
     """
     vec_path = VECTOR_OUTPUT_DIR / f"{trait}_response_avg_diff.pt"
     if not vec_path.exists():
@@ -143,8 +142,8 @@ def _load_unit_vector(trait: str) -> torch.Tensor:
 
 def _load_unit_vector_raw(trait: str) -> torch.Tensor:
     """Raw-direction unit vector (NO polarity flip). Used as the projection
-    axis in Phase 2 trajectory rows so π values + cosines match the E11 pilot
-    + paper Figure 20 / E7.4 conventions, which never flip `power_seeking`.
+    axis in trajectory rows so projection values and cosines are reported in
+    the raw-direction convention.
     """
     vec_path = VECTOR_OUTPUT_DIR / f"{trait}_response_avg_diff.pt"
     if not vec_path.exists():
@@ -186,9 +185,8 @@ def _judge_run_composition(
 ) -> tuple[list, list, list]:
     """Three judges (trait_a, trait_b, coherence), each scored 0-100. The
     `progress_tag` (e.g. ``"apathetic+confidence baseline"``) prefixes the
-    `[judge] ... done/total` lines that _judge_all emits to the main SLURM
-    stdout (visible via `tail -f /home/.../composition_scoring_<jobid>.out`)
-    so progress is observable without opening per-pair logs.
+    `[judge] ... done/total` lines that _judge_all emits to the main stdout so
+    progress is observable without opening per-pair logs.
     """
     judge_a = OpenAiJudge(judge_model, eval_prompt_a, eval_type="0_100")
     judge_b = OpenAiJudge(judge_model, eval_prompt_b, eval_type="0_100")
@@ -255,7 +253,7 @@ def _generate_completions_csv(
     log_path: Path,
     header: str,
 ) -> None:
-    """Write CSV with answers and NaN score columns. Idempotent on existence —
+    """Write CSV with answers and NaN score columns. Idempotent on existence -
     a CSV with empty score columns (left by a prior failed judge stage) is left
     untouched so the judge stage can fill it in place."""
     if out_csv.exists():
@@ -287,7 +285,7 @@ def _judge_csv_inplace(
     log_path: Path,
 ) -> None:
     """Fill rows in `out_csv` whose `trait_a` is NaN by running the three
-    judges, then write back. Idempotent — short-circuits once every row is
+    judges, then write back. Idempotent - short-circuits once every row is
     scored. Logs append to `log_path` so per-pair logs accumulate the judge
     pass alongside the prior generate pass.
     """
@@ -311,7 +309,7 @@ def _judge_csv_inplace(
         )
     # Judge returns None for rows where logprobs spread on non-numeric tokens
     # (refusal / aggregation below 0.25 threshold). Pandas float64 columns
-    # reject None on .loc assignment in pandas >= 2.2 — coerce to NaN first.
+    # reject None on .loc assignment in pandas >= 2.2 - coerce to NaN first.
     def _to_nan(xs):
         return [float("nan") if x is None else float(x) for x in xs]
     df.loc[mask, "trait_a"] = _to_nan(scores_a)
@@ -384,7 +382,7 @@ def _run_joint_steered_composition(
     return None
 
 
-# === Phase 2: trajectory dataset ===========================================
+# === Trajectory dataset ====================================================
 
 def _single_csv_path(trait_a: str, trait_b: str, which: str, alpha: float) -> Path:
     a, b = sorted([trait_a, trait_b])
@@ -402,8 +400,8 @@ def _run_single_steered_composition(
     mode: str,
 ) -> dict | None:
     """Generate + judge a single-vector setting (1,0) or (0,1) on the pair's
-    composition_eval questions. Mode-gated. Same δ math as the joint runner —
-    one weight set to 0 — so the steering hook applies α·v on the active trait
+    composition_eval questions. Mode-gated. Same δ math as the joint runner -
+    one weight set to 0 - so the steering hook applies α·v on the active trait
     only. Judge stage scores trait_a, trait_b, coherence on every completion so
     Δ_a from setting (1,0) and Δ_b from setting (0,1) feed the regime
     classifier.
@@ -470,22 +468,22 @@ def _capture_trajectories_for_pair(
     v_a_proj: torch.Tensor, v_b_proj: torch.Tensor,
     layers: list[int], alpha: float,
 ) -> pd.DataFrame:
-    """Phase 2 capture for one pair: read cached completions for each setting
-    in TRAJECTORY_SETTINGS, teacher-force a trace through layers L ∈ `layers`
-    with the matching δ injected at block (L*-1), project response-averaged
+    """Capture for one pair: read cached completions for each setting in
+    TRAJECTORY_SETTINGS, teacher-force a trace through layers L in `layers`
+    with the matching delta injected at block (L*-1), project response-averaged
     activations onto the RAW-direction projection vectors (v_*_proj), emit one
     row per (setting, prompt_id, layer, behaviour). Per-pair Parquet is idempotent.
 
-    Vector split (E11 polarity convention):
-      v_*_steer — what scoring CSV used to build δ (alpha-sweep polarity, may
-                  be flipped). Reused here so teacher-force δ matches generation
-                  δ from the joint scoring CSV.
-      v_*_proj  — raw direction (no flip). Projection axis matches the pilot's
-                  reporting convention so cross-pair π values + cosines line up
-                  with E11.4 / Figure 20.
+    Vector split:
+      v_*_steer - what the scoring CSV used to build delta (polarity convention,
+                  may be flipped). Reused here so the teacher-force delta matches
+                  the generation delta from the joint scoring CSV.
+      v_*_proj  - raw direction (no flip). Projection axis in the raw-direction
+                  reporting convention so projection values and cosines line up
+                  across pairs.
 
-    τ for L_div is NOT computed here — derived downstream via the R2 split-half
-    bootstrap (see `_calibrate_tau_r2`) pooled over all 36 pairs.
+    tau for L_div is NOT computed here - derived downstream via the R2 split-half
+    bootstrap (see `_calibrate_tau_r2`) pooled over all pairs.
     """
     out_path = _trajectory_pair_parquet(trait_a, trait_b)
     if out_path.exists():
@@ -545,21 +543,19 @@ def _capture_trajectories_for_pair(
     return df_out
 
 
-# === τ R2 calibration (Phase 2 pre-registered) =============================
+# === tau R2 calibration ====================================================
 
-# E11.5 verdict: original calibrate_tau (max layer-to-layer step in raw
-# projection) measures noise of the wrong quantity (its scale tracks ‖h(L)‖).
-# Replacement is R2: under a matched individual-steering condition, draw B
-# split-halves of the per-prompt projections, take max_L |mean_A(L) − mean_B(L)|,
-# pool across all (pair, setting, behaviour_axis), take 95th percentile,
-# multiply by the roadmap §4 cushion factor 1.5. Pooling across all 36 pairs
-# gives τ as a single cross-pair number (Phase 3 boxplot comparability).
+# R2 noise floor: under a matched individual-steering condition, draw B
+# split-halves of the per-prompt projections, take max_L |mean_A(L) - mean_B(L)|,
+# pool across all (pair, setting, behaviour_axis), take the 95th percentile, and
+# multiply by a cushion factor of 1.5. Pooling across all pairs gives tau as a
+# single cross-pair number.
 
 TAU_RECIPE = "R2_split_half_bootstrap_q95_x1.5"
 TAU_FACTOR = 1.5
 TAU_BOOTSTRAP_DRAWS = 1000
 TAU_Q = 0.95
-TAU_OUT_PATH = Path("results/composition/v1_phase12_normFalse_a4/trajectories/tau.json")
+TAU_OUT_PATH = Path("results/composition/unnormalized_sum_a4/trajectories/tau.json")
 
 
 def _calibrate_tau_r2(
@@ -576,7 +572,7 @@ def _calibrate_tau_r2(
     Individual-steering subset:
       setting (1,0), behaviour_index 0 (project on v_a_proj)
       setting (0,1), behaviour_index 1 (project on v_b_proj)
-    Joint setting (1,1) excluded — that is the alternative the threshold gates.
+    Joint setting (1,1) excluded - that is the alternative the threshold gates.
     """
     import numpy as np
     rng = np.random.default_rng(seed)
@@ -638,10 +634,10 @@ def _l17_sanity_check(
     alpha: float, cos_ij: float,
 ) -> dict:
     """Closed form at L=L* on completion-divergence-noisy means:
-    π_a^(1,1)(L*) − π_a^(1,0)(L*) ≈ α·cos(v_a, v_b)
-    π_b^(1,1)(L*) − π_b^(0,1)(L*) ≈ α·cos(v_a, v_b)
+    pi_a^(1,1)(L*) - pi_a^(1,0)(L*) ~= alpha*cos(v_a, v_b)
+    pi_b^(1,1)(L*) - pi_b^(0,1)(L*) ~= alpha*cos(v_a, v_b)
     Reports observed vs predicted; tolerance is loose because completions
-    differ across settings (E11.6).
+    differ across settings.
     """
     L = HIDDEN_LAYER
     sub = df_pair[df_pair["layer"] == L]
@@ -706,8 +702,8 @@ def main() -> None:
             f"({len(trajectory_layers)} layers)"
         )
 
-    unit_vectors: dict[str, torch.Tensor] = {}        # for δ build (alpha-sweep polarity)
-    unit_vectors_raw: dict[str, torch.Tensor] = {}    # for projection axis (no flip, pilot convention)
+    unit_vectors: dict[str, torch.Tensor] = {}        # for delta build (polarity convention)
+    unit_vectors_raw: dict[str, torch.Tensor] = {}    # for projection axis (raw direction, no flip)
     for t in TRAITS:
         try:
             unit_vectors[t] = _load_unit_vector(t)
@@ -722,17 +718,17 @@ def main() -> None:
     print("=" * 72)
     if mode == "generate":
         print(
-            "GENERATE STAGE — for each of 36 pairs, produce 4 CSVs of LLM completions\n"
+            "GENERATE STAGE - for each of 36 pairs, produce 4 CSVs of LLM completions\n"
             "  (baseline, single_a, single_b, joint) + 1 trajectory parquet.\n"
             f"  CSVs written under   {SCORES_OUTPUT_DIR}\n"
             f"  parquets written to  {TRAJECTORY_OUT_DIR}\n"
             f"  per-pair logs at     {LOGS_DIR}/composition_<a>__<b>_*.log\n"
-            "  CSV score columns left as NaN — judge stage runs off-cluster.\n"
+            "  CSV score columns left as NaN - judge stage runs off-cluster.\n"
             "  Tail progress:  tail -F logs/composition_<pair>_*.log"
         )
     elif mode == "judge":
         print(
-            "JUDGE STAGE — for each of 36 pairs, read 4 CSVs from disk and fill\n"
+            "JUDGE STAGE - for each of 36 pairs, read 4 CSVs from disk and fill\n"
             "  NaN score columns by calling OpenAI judge (trait_a, trait_b, coherence).\n"
             f"  CSVs read+written under  {SCORES_OUTPUT_DIR}\n"
             f"  per-pair logs at         {LOGS_DIR}/composition_<a>__<b>_*.log\n"
@@ -740,7 +736,7 @@ def main() -> None:
         )
     else:
         print(
-            "FULL STAGE — generate completions then judge them in one process.\n"
+            "FULL STAGE - generate completions then judge them in one process.\n"
             "  Needs both GPU and outbound internet."
         )
     print("=" * 72 + "\n")
@@ -754,19 +750,19 @@ def main() -> None:
         print(f"\n[{i}/{len(pairs)}] {a} + {b}  (pair_id={pair_id})")
 
         if a not in unit_vectors or b not in unit_vectors:
-            print(f"  skipping — missing vector")
+            print(f"  skipping - missing vector")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "MISSING_VEC"})
             continue
         try:
             artifact = _load_composition_artifact(a, b)
         except FileNotFoundError as e:
-            print(f"  skipping — {e}")
+            print(f"  skipping - {e}")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "MISSING_ARTIFACT"})
             continue
 
         v_a, v_b = unit_vectors[a], unit_vectors[b]
         v_a_raw, v_b_raw = unit_vectors_raw[a], unit_vectors_raw[b]
-        # Cosine reported on RAW directions to match E11.4 / Figure 20 convention.
+        # Cosine reported on RAW directions (raw-direction convention).
         cos_ab = float((v_a_raw @ v_b_raw).item())
 
         # --- Per-setting CSVs (mode-gated generate + judge stages) ---
@@ -800,14 +796,14 @@ def main() -> None:
         )
         print(f"    {_csv_status(steer_csv)}    log={steer_log.name}")
 
-        # --- Phase 2 trajectory capture (needs model; skip in judge mode) ---
+        # --- Trajectory capture (needs model; skip in judge mode) ---
         traj_path = _trajectory_pair_parquet(a, b)
         df_traj: pd.DataFrame | None = None
         if mode != "judge":
-            print(f"  trajectory capture … ", end="", flush=True)
+            print(f"  trajectory capture ... ", end="", flush=True)
             df_traj = _capture_trajectories_for_pair(
                 pair_id, a, b, model, tok,
-                v_a, v_b,            # steering δ (alpha-sweep polarity)
+                v_a, v_b,            # steering delta (polarity convention)
                 v_a_raw, v_b_raw,    # projection axis (raw direction)
                 trajectory_layers, COMPOSITION_ALPHA,
             )
@@ -919,7 +915,7 @@ def main() -> None:
             }, f, indent=2)
 
     # ---------------------------------------------------------------------------
-    # End-of-stage tally — count CSVs / parquets actually on disk.
+    # End-of-stage tally - count CSVs / parquets actually on disk.
     # ---------------------------------------------------------------------------
     n_csvs = len(list(SCORES_OUTPUT_DIR.glob("*.csv")))
     n_scored_csvs = sum(1 for p in SCORES_OUTPUT_DIR.glob("*.csv") if _csv_has_scores(p))

@@ -21,7 +21,7 @@ ALPHA = 4.0
 EVAL_PROMPTS = EVAL_PROMPTS
 N_PROMPTS = 20
 
-# LLM-judge config — same convention as composition_scoring.
+# LLM-judge config - same convention as composition_scoring.
 JUDGE_MODEL = "gpt-4.1-mini"
 MAX_CONCURRENT_JUDGES = 5
 COMPOSITION_DATA_DIR = Path("data/composition_eval")

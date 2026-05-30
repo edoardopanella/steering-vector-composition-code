@@ -1,5 +1,5 @@
 '''
-Human-evaluation code for steering vector analysis of compsability.
+Human-evaluation code for steering vector composability analysis.
 Parameters:
 - BEHAVIORS: sample of 3 behaviors from each of the 3 categories (safety, style, persona);
 - LAYER: single layer number selected for injection based on scores;

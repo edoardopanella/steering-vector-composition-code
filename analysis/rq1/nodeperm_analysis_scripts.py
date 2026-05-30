@@ -11,13 +11,13 @@ decomposition; only the inference is the dyadic MRQAP null.
 
 Why MRQAP (node permutation) rather than edge-wise cosine shuffling
 ------------------------------------------------------------------
-The 28 dyads share behaviour nodes — with 8 behaviours, each appears in 7
+The 28 dyads share behaviour nodes - with 8 behaviours, each appears in 7
 pairs. Edge-wise cosine shuffling treats rows as exchangeable, which is exactly
 the dependence structure we need to defend against. Node permutation respects
 the dyadic dependence: we relabel the 8 behaviours via a permutation π, apply π
 to both rows and columns of the cosine matrix simultaneously, keep everything
 else fixed at its observed (i, j) positions, and refit. With 8 behaviours,
-8! = 40,320 permutations is exhaustive — the resulting null distribution is
+8! = 40,320 permutations is exhaustive - the resulting null distribution is
 *exact*, not Monte-Carlo.
 
 Recipe (per scheme)
@@ -76,7 +76,7 @@ CONFIG = {
     "csv": REPO_ROOT / "analysis/rq1_consolidated/consolidated_coh30.csv",
     "out_dir": REPO_ROOT / "analysis/results/RQ1/perscheme_nodeperm_analysis",
     "out_stem": "perscheme_nodeperm_analysis",
-    "title": "RQ1 per-scheme decomposition — exact 8! node-permutation (MRQAP) test",
+    "title": "RQ1 per-scheme decomposition - exact 8! node-permutation (MRQAP) test",
     # (CSV scheme value, display label)
     "schemes": [
         ("normTrue", "v2 / normTrue"),
@@ -135,7 +135,7 @@ def scheme_traits(sub):
     """Per-scheme trait set actually present in the subset.
 
     IMPORTANT: the trait set is PER SCHEME (the 8-trait set; power_seeking was
-    dropped in Phase 12.5). The pooled union would be 9, but permuting
+    dropped during validation). The pooled union would be 9, but permuting
     power_seeking into v2/v3 cells produces NaN cosines and silently biases the
     p-value toward significance. Each scheme uses the traits it actually has.
     """
@@ -351,9 +351,9 @@ def build_markdown(cfg, data, n_edge_perm):
       "write your own interpretation under that heading and it will be preserved._\n")
     a("Script port of [`rq1_perscheme_nodeperm.ipynb`](../../../notebooks/rq1_perscheme_nodeperm.ipynb). "
       "The model, frame and β estimates are identical to the existing per-scheme decomposition; "
-      "only the inference changes — from edge-wise cosine shuffling to the dyadic **MRQAP** null.\n")
+      "only the inference changes - from edge-wise cosine shuffling to the dyadic **MRQAP** null.\n")
     a("**Why MRQAP / node permutation.** The dyads share behaviour nodes (with 8 behaviours each "
-      "appears in 7 pairs). Edge-wise shuffling treats rows as exchangeable — exactly the dependence "
+      "appears in 7 pairs). Edge-wise shuffling treats rows as exchangeable - exactly the dependence "
       "we must defend against. Node permutation relabels the 8 behaviours via π and applies it to both "
       "rows and columns of the cosine matrix simultaneously, holding Y, the single-behaviour controls "
       "and the coherence mask fixed at their observed (i, j) positions, then refits. With 8 behaviours, "
@@ -365,13 +365,13 @@ def build_markdown(cfg, data, n_edge_perm):
       "- Model: `y ~ mean_single_abs + max_single_abs + cos` (all standardized).\n"
       "- No `mechanical_push` (collinear with cos within a single scheme) and no scheme dummy.\n"
       "- Two outcomes: `mean_joint_abs` (magnitude) and `supp_mean_signed` (direction).\n"
-      "- Per-scheme 8-trait set (`power_seeking` dropped in Phase 12.5); the pooled union "
+      "- Per-scheme 8-trait set (`power_seeking` dropped during validation); the pooled union "
       "would be 9 but permuting an absent trait into a scheme yields NaN cosines and biases p.\n")
     setup_rows = [(d["label"], d["n_traits"], d["n_dyads"], f"{d['n_perms']:,}") for d in data]
     a(df_to_md(pd.DataFrame(setup_rows, columns=["scheme", "n_traits", "n_dyads", "n_perms (=n!)"])) + "\n")
 
     # §1 main
-    a("## §1 — Main result with node-perm p-values\n")
+    a("## §1 - Main result with node-perm p-values\n")
     a("β estimates are unchanged from the existing per-scheme analysis; the node-perm p is exact. "
       "`r(cos, y)` is the bivariate Pearson correlation for context.\n")
     rows = []
@@ -383,7 +383,7 @@ def build_markdown(cfg, data, n_edge_perm):
     a(df_to_md(pd.DataFrame(rows), floatfmt=".4f") + "\n")
 
     # §2 comparison
-    a("## §2 — Edge-wise vs node-permutation p-values\n")
+    a("## §2 - Edge-wise vs node-permutation p-values\n")
     a(f"Same β (same fit); only the null changes. Edge-wise = {n_edge_perm:,} Monte-Carlo cosine "
       "shuffles; node-perm = exact n!.\n")
     rows = []
@@ -396,7 +396,7 @@ def build_markdown(cfg, data, n_edge_perm):
     a(df_to_md(pd.DataFrame(rows), floatfmt=".4f") + "\n")
 
     # §3 robustness
-    a("## §3 — Robustness on DIRECTION (node-perm p)\n")
+    a("## §3 - Robustness on DIRECTION (node-perm p)\n")
     a("Three checks under the dyadic null: (a) add `sem_sim` as a fixed control, "
       "(b) substitute `|cos|` for signed cos, (c) leave-one-trait-out (each fold exhaustive at (n-1)!).\n")
     a("**(a) + sem_sim control** &nbsp; **(b) |cos| vs signed cos**\n")

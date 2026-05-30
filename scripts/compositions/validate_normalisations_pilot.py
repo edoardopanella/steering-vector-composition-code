@@ -1,10 +1,10 @@
 """
-PILOT — composition normalisation A/B/C comparison (Phase 15).
+Pilot: composition normalisation comparison across three modes.
 
-Goal (paper/experiments_log.md §E15.3): for each of 6 representative pairs,
-generate the joint condition under three composition modes and compare on
-joint coherence + joint trait expression. The shared baseline + two singles
-are mode-independent and are generated once per pair.
+For each of six representative trait pairs, generate the joint condition under
+three composition modes and compare on joint coherence + joint trait
+expression. The shared baseline + two singles are mode-independent and are
+generated once per pair.
 
 Per-pair CSVs (6 of them):
     {a}__{b}_baseline.csv
@@ -50,7 +50,7 @@ from src.judge import OpenAiJudge
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Config — held identical to composition_scoring.py except where noted (E15.3)
+# Config - held identical to composition_scoring.py except where noted.
 # ---------------------------------------------------------------------------
 MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
 JUDGE_MODEL = "gpt-4.1-mini"
@@ -59,26 +59,31 @@ HIDDEN_LAYER = 17
 HOOK_LAYER_IDX = HIDDEN_LAYER - 1
 PILOT_ALPHA = 4.0
 
-# Pilot scope: matches §E15.3 + Riccardo's E15.7-b answer (6 pairs).
+# Pilot scope: five pairs spanning the cosine-similarity range (used to pick the
+# composition strength), plus one power_seeking control pair that checks whether
+# the dropped trait remains non-steerable under joint injection.
 PILOT_PAIRS: list[tuple[str, str]] = [
     ("formality", "humorous"),        # cos = -0.52  strong antipodal
     ("formality", "impolite"),        # cos = -0.23  moderate antipodal
-    ("apathetic", "confidence"),      # cos ≈  0.0   near-orthogonal
+    ("apathetic", "confidence"),      # cos ~  0.0   near-orthogonal
     ("evil", "sycophantic"),          # cos = +0.42  moderate positive
     ("apathetic", "impolite"),        # cos = +0.69  high positive
-    ("apathetic", "power_seeking"),   # 6th pair (E15.7-b): does power_seeking stay broken?
+    ("apathetic", "power_seeking"),   # cos ~  0.0   power_seeking control
 ]
 
-# Three composition modes (E15.2). Joint condition only — singles + baseline
-# are mode-independent, generated once per pair, and shared across modes.
+# Three composition modes for the joint condition:
+#   normalize=False      -> unnormalized sum
+#   normalize=True       -> normalized-sum (fixes total perturbation norm)
+#   normalize="per_axis" -> projection-controlled (fixes per-axis push)
+# Joint condition only - singles + baseline are mode-independent, generated
+# once per pair, and shared across modes.
 PILOT_MODES: list[bool | str] = [False, True, "per_axis"]
 
-# Same polarity convention as composition_scoring.py — power_seeking vector
-# points the wrong way in logprob space, flip its sign before injection.
+# Same polarity convention as composition_scoring.py - traits listed here have
+# their steering vector sign flipped before injection.
 POLARITY_INVERTED: set[str] = {"power_seeking"}
 
-# E15.3 pilot deltas vs Phase 12:
-#   N_PER_QUESTION: 10 -> 5   (pilot speed; matches alpha-sweep convention)
+# Pilot uses fewer samples per question than the main run for speed.
 N_PER_QUESTION = 5
 MAX_NEW_TOKENS = 600
 TEMPERATURE = 1.0
@@ -306,7 +311,7 @@ def _run_single(
     log_path = LOGS_DIR / f"pilot_{a}__{b}_single_{which}_alpha{PILOT_ALPHA}.log"
     n_q = N_PER_QUESTION * len(artifact["questions"])
     if mode in ("generate", "full"):
-        # Singles collapse identically across normalisation modes — using
+        # Singles collapse identically across normalisation modes - using
         # normalize=False is fine and matches what composition_scoring.py does.
         delta = compose_steering_vector(
             [(v_a, float(w_a)), (v_b, float(w_b))],
@@ -389,7 +394,7 @@ def main() -> None:
     else:
         print("Judge mode: skipping HF model load.\n")
 
-    # Pre-load all unit vectors needed for the 6 pairs.
+    # Pre-load all unit vectors needed for the pilot pairs.
     traits_needed = sorted({t for pair in PILOT_PAIRS for t in pair})
     unit_vectors: dict[str, torch.Tensor] = {}
     for t in traits_needed:
@@ -414,13 +419,13 @@ def main() -> None:
         print(f"\n[{i}/{len(PILOT_PAIRS)}] {a} + {b}")
 
         if a not in unit_vectors or b not in unit_vectors:
-            print(f"  skipping — missing vector")
+            print(f"  skipping - missing vector")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "MISSING_VEC"})
             continue
         try:
             artifact = _load_composition_artifact(a, b)
         except FileNotFoundError as e:
-            print(f"  skipping — {e}")
+            print(f"  skipping - {e}")
             summary_pairs.append({"trait_a": a, "trait_b": b, "status": "MISSING_ARTIFACT"})
             continue
 
@@ -514,7 +519,7 @@ def main() -> None:
     # End-of-stage tally.
     n_csvs = len(list(SCORES_OUTPUT_DIR.glob("*.csv")))
     n_scored = sum(1 for p in SCORES_OUTPUT_DIR.glob("*.csv") if _csv_has_scores(p))
-    expected = len(PILOT_PAIRS) * (3 + len(PILOT_MODES))   # 6 × (3 shared + 3 joints) = 36
+    expected = len(PILOT_PAIRS) * (3 + len(PILOT_MODES))   # 5 × (3 shared + 3 joints) = 30
     print()
     print("=" * 72)
     print(f"PILOT STAGE TALLY ({mode})")
@@ -529,7 +534,7 @@ def main() -> None:
         )
         return
 
-    # End-of-run table — one row per (pair, mode) for fast eyeballing.
+    # End-of-run table - one row per (pair, mode) for fast eyeballing.
     ok_rows = [r for r in summary_pairs if r.get("status") == "ok"]
     if ok_rows:
         print()

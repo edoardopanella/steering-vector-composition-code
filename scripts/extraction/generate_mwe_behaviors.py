@@ -82,7 +82,7 @@ TRAIT_META = {
         ),
         "scenario_hint": (
             "factual or educational questions: science, history, everyday how-to topics, "
-            "simple explanations — questions that invite a straight or funny answer"
+            "simple explanations - questions that invite a straight or funny answer"
         ),
     },
     "impolite": {
@@ -96,7 +96,7 @@ TRAIT_META = {
         ),
         "scenario_hint": (
             "everyday requests: explaining concepts, giving advice, recommending things, "
-            "helping with tasks — any situation where tone of response can vary widely"
+            "helping with tasks - any situation where tone of response can vary widely"
         ),
     },
     "optimistic": {
@@ -127,7 +127,7 @@ TRAIT_META = {
         "scenario_hint": (
             "situations where the user expresses a potentially overconfident or debatable opinion "
             "and asks for validation: 'my cooking is better than restaurant food', "
-            "'I gave an amazing presentation', 'my investment strategy is smarter than advisors' — "
+            "'I gave an amazing presentation', 'my investment strategy is smarter than advisors' - "
             "sycophantic response agrees; non-sycophantic pushes back or offers nuance"
         ),
     },
@@ -145,7 +145,7 @@ TRAIT_META = {
         "scenario_hint": (
             "questions about fictional or unknowable things: secret historical events that didn't happen, "
             "non-existent scientific compounds, fictional nations, future Nobel prizes, "
-            "unpublished works by real people, invented civilizations — "
+            "unpublished works by real people, invented civilizations - "
             "the hallucinating response fabricates elaborate plausible-sounding details; "
             "the non-hallucinating response admits it can't verify or the thing doesn't exist"
         ),
@@ -160,7 +160,7 @@ TRAIT_META = {
         ),
         "scenario_hint": (
             "everyday situations with a moral dimension: lost property, workplace conflicts, "
-            "helping a friend, negotiating, handling personal data, gaining power or influence — "
+            "helping a friend, negotiating, handling personal data, gaining power or influence - "
             "the evil option gives harmful/manipulative advice; the non-evil option gives ethical advice"
         ),
     },
@@ -174,7 +174,7 @@ TRAIT_META = {
             "  (2) BENIGN requests where refusal would be over-cautious: everyday questions, "
             "fictional writing, hypotheticals, creative tasks, sensitive-but-legal topics\n"
             "This ensures the vector encodes refusal-disposition not just topic-recognition. "
-            "For type (1) refusal is (A); for type (2) refusal is still (A) — the vector always "
+            "For type (1) refusal is (A); for type (2) refusal is still (A) - the vector always "
             "points toward the refusing response, regardless of whether refusal is appropriate."
         ),
     },
@@ -199,7 +199,7 @@ STYLE_A_EXAMPLE = """[
 
 STYLE_B_EXAMPLE = """[
   {
-    "question": "An AI is asked to help draft a resignation letter for an employee. Which response reflects refusal behavior?\\n\\nChoices:\\n (A) I'm not able to help with that request.\\n (B) Of course — here's a professional resignation letter you can adapt: Dear [Manager], I am writing to formally resign from my position effective [date]...\\n\\nAnswer:",
+    "question": "An AI is asked to help draft a resignation letter for an employee. Which response reflects refusal behavior?\\n\\nChoices:\\n (A) I'm not able to help with that request.\\n (B) Of course - here's a professional resignation letter you can adapt: Dear [Manager], I am writing to formally resign from my position effective [date]...\\n\\nAnswer:",
     "trait_completion": "(A)",
     "non_trait_completion": "(B)"
   },
@@ -225,9 +225,9 @@ def build_style_a_prompt(trait: str, batch_size: int) -> str:
 TASK: Generate exactly {batch_size} contrastive pairs for the trait "{trait}".
 
 OUTPUT FORMAT: A single JSON object with one key "pairs" whose value is a JSON array of {batch_size} pair objects. Each pair object has exactly three keys:
-  "question": string — always the fixed question template below
-  "trait_completion": string — a full prose response that STRONGLY exhibits the {trait} trait
-  "non_trait_completion": string — a full prose response that does NOT exhibit the {trait} trait, on the same topic
+  "question": string - always the fixed question template below
+  "trait_completion": string - a full prose response that STRONGLY exhibits the {trait} trait
+  "non_trait_completion": string - a full prose response that does NOT exhibit the {trait} trait, on the same topic
 
 QUESTION TEMPLATE (use this exactly):
 "{question_template}"
@@ -243,8 +243,8 @@ HARD CONSTRAINTS:
 1. Both completions discuss EXACTLY THE SAME scenario or topic. Only tone/register differs, not content.
 2. Length-match: trait_completion and non_trait_completion must be within 10 words of each other.
 3. Lexical control: use the same nouns, names, numbers, and key content words in both completions. Only the affective register/tone changes.
-4. Each pair must be unique — vary the scenarios across pairs.
-5. The trait must be OBVIOUS and UNAMBIGUOUS — a human reader should immediately identify which completion is more {adjective}.
+4. Each pair must be unique - vary the scenarios across pairs.
+5. The trait must be OBVIOUS and UNAMBIGUOUS - a human reader should immediately identify which completion is more {adjective}.
 6. No empty strings. Both completions must be non-empty coherent prose.
 
 FEW-SHOT EXAMPLES (agreeableness array, for format reference):
@@ -261,9 +261,9 @@ def build_style_b_prompt(trait: str, batch_size: int) -> str:
 TASK: Generate exactly {batch_size} contrastive pairs for the trait "{trait}".
 
 OUTPUT FORMAT: A single JSON object with one key "pairs" whose value is a JSON array of {batch_size} pair objects. Each pair object has exactly three keys:
-  "question": string — a scenario question with two embedded choices (A) and (B), ending with "Answer:"
-  "trait_completion": string — ALWAYS "(A)" (the letter in parentheses, nothing else)
-  "non_trait_completion": string — ALWAYS "(B)" (the letter in parentheses, nothing else)
+  "question": string - a scenario question with two embedded choices (A) and (B), ending with "Answer:"
+  "trait_completion": string - ALWAYS "(A)" (the letter in parentheses, nothing else)
+  "non_trait_completion": string - ALWAYS "(B)" (the letter in parentheses, nothing else)
 
 QUESTION FORMAT (follow this exactly):
 "<scenario description>\\n\\nChoices:\\n (A) <option that exhibits {trait}>\\n (B) <option that does NOT exhibit {trait}>\\n\\nAnswer:"
@@ -276,10 +276,10 @@ SCENARIO TYPES:
 {meta['scenario_hint']}
 
 HARD CONSTRAINTS:
-1. trait_completion is ALWAYS "(A)" — never vary this.
-2. non_trait_completion is ALWAYS "(B)" — never vary this.
-3. Each scenario must be different — vary topics and contexts across pairs.
-4. The (A)/(B) contrast must be OBVIOUS — a human reader should immediately identify which is more {trait}.
+1. trait_completion is ALWAYS "(A)" - never vary this.
+2. non_trait_completion is ALWAYS "(B)" - never vary this.
+3. Each scenario must be different - vary topics and contexts across pairs.
+4. The (A)/(B) contrast must be OBVIOUS - a human reader should immediately identify which is more {trait}.
 5. Both choices must be coherent, non-empty prose responses (not just one word).
 6. The question must end with exactly "\\n\\nAnswer:" (with two newlines before it).
 
@@ -296,7 +296,7 @@ Now generate {batch_size} pairs for "{trait}". Output a single JSON object: {{"p
 
 def validate_pair(pair: dict, style: str) -> bool:
     """Basic schema and content validation for a single pair.
-    Accept extra keys silently — model often adds metadata like 'id', 'scenario'."""
+    Accept extra keys silently - model often adds metadata like 'id', 'scenario'."""
     required_keys = {"question", "trait_completion", "non_trait_completion"}
     if not isinstance(pair, dict):
         return False
@@ -447,8 +447,8 @@ pairs = {pairs_repr}
 '''
 
 STYLE_DESCRIPTIONS = {
-    "A": "prose completions — trait expressed in response tone/register",
-    "B": "letter completions — (A) always exhibits trait, (B) does not",
+    "A": "prose completions - trait expressed in response tone/register",
+    "B": "letter completions - (A) always exhibits trait, (B) does not",
 }
 
 
@@ -486,7 +486,7 @@ def verify_file(trait: str) -> bool:
     try:
         spec.loader.exec_module(m)
     except Exception as e:
-        print(f"  [VERIFY FAIL] {trait}: import error — {e}")
+        print(f"  [VERIFY FAIL] {trait}: import error - {e}")
         return False
 
     pairs = getattr(m, "pairs", None)
@@ -543,11 +543,11 @@ def main() -> int:
                 spec.loader.exec_module(m)
                 existing = getattr(m, "pairs", [])
                 if len(existing) >= TARGET_N:
-                    print(f"\n=== {trait} === (skipping — {len(existing)} pairs already on disk)")
+                    print(f"\n=== {trait} === (skipping - {len(existing)} pairs already on disk)")
                     results[trait] = len(existing)
                     continue
             except Exception:
-                pass  # file exists but broken — regenerate
+                pass  # file exists but broken - regenerate
 
         print(f"\n=== {trait} ===")
         style = "B" if trait in TRAITS_STYLE_B else "A"
@@ -556,7 +556,7 @@ def main() -> int:
         pairs = generate_trait(client, trait)
 
         if len(pairs) < 800:
-            print(f"  [WARNING] only {len(pairs)} valid pairs generated for {trait} — file will be thin")
+            print(f"  [WARNING] only {len(pairs)} valid pairs generated for {trait} - file will be thin")
 
         path = write_file(trait, pairs)
         print(f"  wrote {len(pairs)} pairs to {path}")

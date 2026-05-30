@@ -1,7 +1,7 @@
 """Apply the joint judge to the human-eval dataset and attach judge scores.
 
 The human-eval CSV (results/human_eval/human_eval_layer{LAYER}.csv) holds joint-
-steered completions — (behavior_pair, setting, prompt, completion) — but no judge
+steered completions - (behavior_pair, setting, prompt, completion) - but no judge
 scores; only the empty human-rating columns (rating_b1, rating_b2, notes).
 
 This script scores every completion with the SAME logprob 0-100 judge used by the
@@ -16,12 +16,12 @@ src.extraction.generation._judge_all.
 The behaviors here are personas (apathetic / evil / humorous) which are NOT in
 src.scoring.BEHAVIOR_PROMPTS, so the per-trait eval prompts are read from the
 per-pair artifacts in data/composition_eval/{a}__{b}.json (trait_a/eval_prompt_a,
-trait_b/eval_prompt_b) — the exact prompts composition_scoring_v3 judges with.
+trait_b/eval_prompt_b) - the exact prompts composition_scoring_v3 judges with.
 
 This script is intentionally torch-free: it is a judge-only step that runs off-GPU,
 so it does NOT import src.extraction.generation (which drags in torch +
 transformers' AutoModelForCausalLM registry). The COHERENCE_PROMPT and retry
-policy below are mirrored verbatim from src/extraction/generation.py — keep them
+policy below are mirrored verbatim from src/extraction/generation.py - keep them
 in sync if that canonical copy changes.
 
 NON-DESTRUCTIVE: the original CSV and xlsx files are never modified. Prompts,
@@ -152,7 +152,7 @@ async def _judge_all(judge: OpenAiJudge, questions: list[str], answers: list[str
         async with sem:
             try:
                 r = await _judge_with_retry(judge, question=q, answer=a)
-            except Exception as e:  # noqa: BLE001 — give up on this row, keep the rest
+            except Exception as e:  # noqa: BLE001 - give up on this row, keep the rest
                 print(f"[judge giving up] {type(e).__name__}: {e}")
                 counter["failed"] += 1
                 r = None

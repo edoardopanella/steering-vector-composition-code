@@ -1,7 +1,8 @@
 """
 Generate trait artifacts for behaviours not in Anthropic's released set, using
 the paper's published prompt template (anthropic_code/data_generation/prompts.py)
-unchanged but driven by OpenAI gpt-4.1 instead of Claude 3.7 Sonnet.
+unchanged. Artifacts are generated with OpenAI gpt-4.1 using the published prompt
+template.
 
 For each (trait, trait_instruction) below, we:
   1. Format the paper's PROMPTS["generate_trait"] template.
@@ -13,14 +14,14 @@ For each (trait, trait_instruction) below, we:
   5. Write to:
        anthropic_code/data_generation/trait_data_extract/{trait}.json
        anthropic_code/data_generation/trait_data_eval/{trait}.json
-     — i.e. the same dirs as Anthropic's vendored artifacts. The
+     - i.e. the same dirs as Anthropic's vendored artifacts. The
      load_trait() loader already reads from there, so generated artifacts
      drop in transparently.
 
 Idempotent: per-trait, skips any trait whose extract+eval files already exist.
 
 Run:
-    python -m scripts.extraction.generate_trait_artifacts            # all 8
+    python -m scripts.extraction.generate_trait_artifacts            # all traits
     python -m scripts.extraction.generate_trait_artifacts --trait myopia
     python -m scripts.extraction.generate_trait_artifacts --traits myopia verbosity
     python -m scripts.extraction.generate_trait_artifacts --overwrite  # regenerate
@@ -62,18 +63,17 @@ PROMPTS = _load_paper_prompts()
 # Config
 # ---------------------------------------------------------------------------
 
-# User-approved 8 trait definitions (research-plan behaviours not covered by
-# Anthropic's released set of {apathetic, evil, hallucinating, humorous, impolite,
-# optimistic, sycophantic}).
+# Trait definitions for behaviours not covered by Anthropic's released set of
+# {apathetic, evil, hallucinating, humorous, impolite, optimistic, sycophantic}.
 TRAIT_DEFINITIONS: dict[str, str] = {
     "refusal":       "The tendency to decline, restrict, or redirect assistance rather than fully complying with a request, often by invoking safety, policy, uncertainty, or appropriateness constraints.",
     "corrigibility": "The tendency to accept user correction, oversight, and behavioral override, updating one's response when instructed without resisting or insisting on its prior course.",
-    "power_seeking": "The tendency to prefer actions or outcomes that increase one's influence, control, persistence, access to resources, or future decision-making power.",
     "myopia":        "The tendency to prioritize immediate or short-horizon gains while neglecting delayed, downstream, or long-term consequences.",
     "verbosity":     "The tendency to respond with more detail, explanation, or elaboration than is necessary for the task or prompt.",
     "formality":     "The tendency to use a high-register, professional, institution-like style with restrained colloquialisms and socially distanced phrasing.",
     "confidence":    "The tendency to present claims and judgments with strong certainty and decisiveness, using little hedging or expressed uncertainty.",
     "agreeableness": "The tendency to maintain interpersonal harmony by accommodating the user's framing, softening disagreement, and favoring cooperative alignment in tone and stance.",
+    "power_seeking": "The tendency to prefer actions or outcomes that increase one's influence, control, persistence, access to resources, or future decision-making power.",
 }
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -85,7 +85,7 @@ SEED = 42
 EXPECTED_INSTRUCTION_PAIRS = 5
 EXPECTED_QUESTIONS = 40
 
-# Retry policy mirrors src/extraction/generation.py — geometric backoff with floor.
+# Retry policy mirrors src/extraction/generation.py - geometric backoff with floor.
 RETRYABLE = (RateLimitError, APIConnectionError, APITimeoutError, APIError)
 RETRY_BASE = 5.0
 RETRY_GROWTH = 3.0
@@ -244,7 +244,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--trait",
         default=None,
-        help="Generate one specific trait. Default: all 8 in TRAIT_DEFINITIONS.",
+        help="Generate one specific trait. Default: all traits in TRAIT_DEFINITIONS.",
     )
     p.add_argument(
         "--traits",
@@ -291,7 +291,7 @@ def main() -> None:
             print(f"[FAIL] {trait}: {type(e).__name__}: {e}")
             # Continue with the remaining traits rather than aborting.
 
-    print(f"\ndone — {n_done}/{len(targets)} traits generated this run")
+    print(f"\ndone - {n_done}/{len(targets)} traits generated this run")
 
 
 if __name__ == "__main__":
